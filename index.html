@@ -1,0 +1,921 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>*{box-sizing:border-box}body{margin:0}</style><title>Signal-Karteikarten</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap">
+<style>
+/* Layout: Kopfzeile mit Fortschritt, Filter nach Schwierigkeit, Raster aus Signaltafel-Kacheln; Karte öffnet als Sheet mit Frage, Antwort-Button unten. */
+:root {
+  --bg: #edf0ea;
+  --surface: #fbfcfa;
+  --ink: #15211b;
+  --muted: #5d6b62;
+  --line: #d3dad2;
+  --tint: #e3ebe2;
+  --accent: #0e7a43;
+  --on-accent: #ffffff;
+  --leicht: #2e9d5f;
+  --mittel: #d9a400;
+  --schwer: #c63a30;
+  --danger: #b3261e;
+  --plate: #f1f3ee;
+  --plate-ink: #3b463f;
+  --overlay: rgba(10, 18, 14, 0.55);
+  --shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 8px 20px -12px rgba(20, 40, 30, 0.4);
+  --font-d: 'Barlow Condensed', 'Arial Narrow', 'Helvetica Neue', sans-serif;
+  --font-b: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1411; --surface: #17201b; --ink: #e7eee8; --muted: #9aa89f; --line: #2a362f; --tint: #1f2b24;
+    --accent: #3fb877; --on-accent: #08140d; --leicht: #4cbf7b; --mittel: #e8b923; --schwer: #ef6a5e; --danger: #ff8a80;
+    --overlay: rgba(0, 0, 0, 0.65); --shadow: 0 1px 0 rgba(0, 0, 0, 0.3), 0 8px 20px -12px rgba(0, 0, 0, 0.8);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1411; --surface: #17201b; --ink: #e7eee8; --muted: #9aa89f; --line: #2a362f; --tint: #1f2b24;
+  --accent: #3fb877; --on-accent: #08140d; --leicht: #4cbf7b; --mittel: #e8b923; --schwer: #ef6a5e; --danger: #ff8a80;
+  --overlay: rgba(0, 0, 0, 0.65); --shadow: 0 1px 0 rgba(0, 0, 0, 0.3), 0 8px 20px -12px rgba(0, 0, 0, 0.8);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 400 16px/1.5 var(--font-b);
+  padding-inline: 16px; padding-block: 20px 40px;
+}
+.wrap { max-width: 960px; margin-inline: auto; display: flex; flex-direction: column; gap: 18px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+header { display: flex; flex-direction: column; gap: 10px; }
+.kicker { font: 600 13px/1 var(--font-b); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+h1 { font: 700 clamp(34px, 8vw, 52px)/0.95 var(--font-d); margin: 0; letter-spacing: 0.01em; text-wrap: balance; }
+.progress { display: flex; flex-direction: column; gap: 6px; }
+.progress-text { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bar { height: 6px; background: var(--tint); border-radius: 3px; overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.chip {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px;
+  background: var(--surface); border: 1.5px solid var(--line); border-radius: 999px; font-weight: 500; font-size: 15px;
+}
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chip .n { font-variant-numeric: tabular-nums; opacity: .7; font-size: 13px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--muted); }
+.dot.leicht { background: var(--leicht); } .dot.mittel { background: var(--mittel); } .dot.schwer { background: var(--schwer); }
+.tools { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.btn {
+  min-height: 44px; padding: 0 18px; border-radius: 10px; border: 1.5px solid var(--accent);
+  background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 16px;
+}
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); font-weight: 500; }
+.btn.danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+.btn.danger.armed { background: var(--danger); color: var(--surface); }
+.btn.wide { flex: 1; }
+.btn[disabled] { opacity: .4; cursor: default; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; }
+.gsec { margin: 0 0 26px; }
+.gsec h2 { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin: 0 0 10px; font: 700 28px/1 var(--font-d); letter-spacing: .01em; }
+.gsec h2 .gt { font: 500 14px/1.2 var(--font-b); color: var(--muted); }
+.gsec h2 .gn { margin-left: auto; font: 500 13px/1 var(--font-b); color: var(--muted); font-variant-numeric: tabular-nums; }
+.sel { width: 100%; min-height: 44px; padding: 0 12px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; }
+.tile {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  aspect-ratio: 1 / 1.1; padding: 12px 6px 8px; background: var(--surface); border: 1.5px solid var(--line);
+  border-radius: 6px; box-shadow: var(--shadow); overflow: hidden; min-width: 0;
+}
+.tile::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 8px; background: var(--muted); }
+.tile.leicht::before { background: var(--leicht); } .tile.mittel::before { background: var(--mittel); } .tile.schwer::before { background: var(--schwer); }
+.tile .num { font: 700 38px/1 var(--font-d); font-variant-numeric: tabular-nums; margin-top: 6px; }
+.tile .lbl { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.tile.known { background: var(--tint); }
+.tile .ok { position: absolute; right: 6px; bottom: 6px; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+.empty { padding: 28px 0; color: var(--muted); }
+.sigs { display: flex; flex-wrap: wrap; gap: 10px; }
+.sig { margin: 0; background: var(--plate); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 100%; min-width: 0; }
+.sig svg { height: 140px; width: auto; max-width: 100%; display: block; }
+.sig figcaption { font-size: 12px; line-height: 1.3; color: var(--plate-ink); text-align: center; font-weight: 500; }
+.sig img { max-height: 180px; max-width: 100%; display: block; border-radius: 4px; }
+.imgfield { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.imgfield img { max-height: 160px; max-width: 100%; border-radius: 8px; border: 1px solid var(--line); background: var(--plate); }
+.filebtn { display: inline-flex; align-items: center; cursor: pointer; }
+.filebtn input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.filebtn:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+.look { margin: 10px 0 0; font-size: 15px; color: var(--muted); overflow-wrap: anywhere; white-space: pre-line; }
+
+/* Sheet */
+.overlay { position: fixed; inset: 0; background: var(--overlay); display: flex; align-items: flex-end; justify-content: center; z-index: 10; }
+.overlay[hidden] { display: none !important; }
+.panel {
+  width: 100%; max-width: 620px; max-height: 100%; display: flex; flex-direction: column; background: var(--surface);
+  border-radius: 14px 14px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); box-shadow: var(--shadow);
+}
+@media (min-width: 700px) { .overlay { align-items: center; padding: 24px; } .panel { border-radius: 14px; max-height: 92%; } }
+.ptop { display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px; border-bottom: 1px solid var(--line); padding-top: calc(14px + env(safe-area-inset-top, 0px)); }
+@media (min-width: 700px) { .ptop { padding-top: 14px; } }
+.badge { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.pos { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; margin-left: auto; }
+.icon-btn { min-width: 44px; min-height: 44px; border: 0; background: transparent; font-size: 26px; line-height: 1; border-radius: 8px; }
+.link-btn { min-height: 44px; border: 0; background: transparent; color: var(--accent); font-weight: 600; font-size: 15px; padding: 0 6px; }
+.pbody { padding: 18px 18px 8px; overflow-y: auto; min-height: 180px; flex: 1; display: flex; flex-direction: column; gap: 14px; }
+.field-label { font: 600 12px/1 var(--font-b); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; display: block; }
+.q { font: 600 clamp(24px, 6vw, 30px)/1.2 var(--font-d); margin: 0; text-wrap: balance; overflow-wrap: anywhere; }
+.a { background: var(--tint); border-radius: 10px; padding: 14px 16px; margin: 0; font-size: 17px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.pfoot { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px 16px; }
+.row { display: flex; gap: 10px; }
+.nav { display: flex; justify-content: space-between; }
+
+.form { display: flex; flex-direction: column; gap: 14px; }
+textarea, .form input[type="text"] {
+  width: 100%; min-height: 96px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px;
+  background: var(--bg); color: var(--ink); font: 400 16px/1.45 var(--font-b); resize: vertical;
+}
+textarea.tall { min-height: 150px; }
+.seg { display: flex; gap: 8px; flex-wrap: wrap; }
+.seg button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1.5px solid var(--line); background: transparent; font-weight: 500; }
+.seg button[aria-pressed="true"] { border-color: var(--ink); background: var(--tint); font-weight: 600; }
+.note { font-size: 14px; color: var(--muted); margin: 0; }
+.msg { font-size: 14px; margin: 0; min-height: 1.4em; }
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 15px; z-index: 20; max-width: 90%;
+}
+.toast[hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="kicker">DS 301 · Signalbuch</div>
+    <h1>Signal-Karteikarten</h1>
+    <div class="progress">
+      <div class="progress-text" id="progressText"></div>
+      <div class="bar" aria-hidden="true"><i id="progressBar"></i></div>
+    </div>
+  </header>
+
+  <div class="controls">
+    <div class="chips" id="gchips" role="group" aria-label="Block"></div>
+    <div class="chips" id="chips" role="group" aria-label="Schwierigkeitsgrad"></div>
+    <div class="tools">
+      <button class="btn" id="addBtn" type="button">Neue Karte</button>
+      <button class="btn ghost" id="manageBtn" type="button">Verwalten</button>
+    </div>
+  </div>
+
+  <main>
+    <div id="grid"></div>
+    <p class="empty" id="empty" hidden>In dieser Stufe gibt es noch keine Karten. Mit „Neue Karte“ legst du eine an.</p>
+  </main>
+</div>
+
+<div class="overlay" id="overlay" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+const SEED = [{"difficulty": "leicht", "question": "Bü 0 – Was bedeutet das Signal?", "answer": "Halt vor dem Bahnübergang! Weiterfahrt nach Sicherung.", "sig": ["bue0"], "look": "Eine runde gelbe Scheibe in einer gelben Umrahmung über einem schwarz-weiß schräg gestreiften Mastschild. Anstatt der Scheibe und der Umrahmung können auch zwei waagrecht angeordnete gelbe Lichter bzw. rückstrahlende Scheiben gezeigt werden.", "group": "Bü"}, {"difficulty": "leicht", "question": "Bü 1 – Was bedeutet das Signal?", "answer": "Der Bahnübergang darf befahren werden.", "sig": ["bue1"], "look": "Ein blinkendes weißes Licht über einer runden gelben Scheibe in gelber Umrahmung über einem schwarz-weiß schräg gestreiften Mastschild. Alternativ: ein weißes Licht über zwei waagrecht angeordneten gelben Lichtern bzw. rückstrahlenden Scheiben.", "group": "Bü"}, {"difficulty": "leicht", "question": "Bü 2 (Rautentafel) – Was bedeutet das Signal?", "answer": "Ein Überwachungssignal ist zu erwarten.", "sig": ["bue2"], "look": "Eine rechteckige schwarze Tafel mit vier auf den Spitzen übereinander stehenden rückstrahlenden weißen Rauten.", "group": "Bü"}, {"difficulty": "leicht", "question": "Bü 3 (Merktafel) – Was bedeutet das Signal?", "answer": "Kennzeichnung des Einschaltpunktes von Blinklichtern oder Lichtzeichen mit Fernüberwachung.", "sig": ["bue3"], "look": "Eine schwarz-weiß waagrecht gestreifte rückstrahlende Tafel.", "group": "Bü"}, {"difficulty": "leicht", "question": "Bü 4 (Pfeiftafel) – Was bedeutet das Signal?", "answer": "Etwa 3 Sekunden lang pfeifen!", "sig": ["bue4"], "look": "Eine rechteckige weiße Tafel mit schwarzem P oder eine rechteckige schwarze Tafel mit weißem Rand und weißem P.", "group": "Bü"}, {"difficulty": "leicht", "question": "Bü 5 (Läutetafel) – Was bedeutet das Signal?", "answer": "Es ist zu läuten.", "sig": ["bue5"], "look": "Eine rechteckige weiße Tafel mit schwarzem L.", "group": "Bü"}, {"difficulty": "leicht", "question": "Lf 1 (Langsamfahrscheibe) – Was bedeutet das Signal?", "answer": "Es folgt eine vorübergehende Langsamfahrstelle, auf der die angezeigte Geschwindigkeit nicht überschritten werden darf.", "sig": ["lf1"], "look": "Tageszeichen: auf der Spitze stehende dreieckige gelbe Scheibe mit weißem Rand und schwarzer Kennziffer (bei beschränktem Raum kann die Spitze nach oben zeigen). Nachtzeichen: unter dem beleuchteten Tageszeichen zwei schräg nach links steigende gelbe Lichter (bei beschränktem Raum vor dem Tageszeichen).", "group": "Lf"}, {"difficulty": "leicht", "question": "Lf 2 (Anfangscheibe) – Was bedeutet das Signal?", "answer": "Anfang der vorübergehenden Langsamfahrstelle.", "sig": ["lf2"], "look": "Eine rechteckige, auf der Schmalseite stehende oder quadratische gelbe Scheibe mit weißem Rand und schwarzem A.", "group": "Lf"}, {"difficulty": "leicht", "question": "Lf 3 (Endscheibe) – Was bedeutet das Signal?", "answer": "Ende der vorübergehenden Langsamfahrstelle.", "sig": ["lf3"], "look": "Eine rechteckige, auf der Schmalseite stehende oder quadratische weiße Scheibe mit schwarzem E.", "group": "Lf"}, {"difficulty": "leicht", "question": "Lf 4 (Geschwindigkeitstafel) – Was bedeutet das Signal?", "answer": "Es folgt eine ständige Langsamfahrstelle, auf der die angezeigte Geschwindigkeit nicht überschritten werden darf.", "sig": ["lf4"], "look": "Eine auf der Spitze stehende dreieckige weiße Tafel mit schwarzem Rand und schwarzer Kennziffer. Bei beschränktem Raum kann die Dreieckspitze nach oben zeigen.", "group": "Lf"}, {"difficulty": "leicht", "question": "Lf 5 (Anfangstafel) – Was bedeutet das Signal?", "answer": "Die auf der Geschwindigkeitstafel (Lf 4) angezeigte Geschwindigkeitsbeschränkung muss durchgeführt sein.", "sig": ["lf5"], "look": "Eine rechteckige, auf der Schmalseite stehende weiße Tafel mit schwarzem A.", "group": "Lf"}, {"difficulty": "leicht", "question": "Lf 6 (Geschwindigkeits-Ankündesignal) – Was bedeutet das Signal?", "answer": "Ein Geschwindigkeitssignal (Lf 7) ist zu erwarten.", "sig": ["lf6"], "look": "Eine auf der Spitze stehende, schwarz- und weiß umrandete dreieckige gelbe Tafel mit schwarzer Kennziffer.", "group": "Lf"}, {"difficulty": "leicht", "question": "Lf 7 (Geschwindigkeitssignal) – Was bedeutet das Signal?", "answer": "Die angezeigte Geschwindigkeit darf vom Signal ab nicht überschritten werden.", "sig": ["lf7"], "look": "Eine rechteckige, auf der Schmalseite stehende oder quadratische weiße Tafel mit schwarzem Rand und schwarzer Kennziffer.", "group": "Lf"}, {"difficulty": "mittel", "question": "Wie sieht Bü 0 aus?", "answer": "Eine runde gelbe Scheibe in einer gelben Umrahmung über einem schwarz-weiß schräg gestreiften Mastschild. Anstatt der Scheibe und der Umrahmung können auch zwei waagrecht angeordnete gelbe Lichter bzw. rückstrahlende Scheiben gezeigt werden.", "sig": ["bue0"], "group": "Bü"}, {"difficulty": "mittel", "question": "Wie sieht Bü 1 aus?", "answer": "Ein blinkendes weißes Licht über einer runden gelben Scheibe in gelber Umrahmung über einem schwarz-weiß schräg gestreiften Mastschild. Alternativ: ein weißes Licht über zwei waagrecht angeordneten gelben Lichtern bzw. rückstrahlenden Scheiben.", "sig": ["bue1"], "group": "Bü"}, {"difficulty": "mittel", "question": "Wie sieht Bü 2 (Rautentafel) aus?", "answer": "Eine rechteckige schwarze Tafel mit vier auf den Spitzen übereinander stehenden rückstrahlenden weißen Rauten.", "sig": ["bue2"], "group": "Bü"}, {"difficulty": "mittel", "question": "Wie sieht Bü 3 (Merktafel) aus?", "answer": "Eine schwarz-weiß waagrecht gestreifte rückstrahlende Tafel.", "sig": ["bue3"], "group": "Bü"}, {"difficulty": "mittel", "question": "Wie sieht Bü 4 (Pfeiftafel) aus?", "answer": "Eine rechteckige weiße Tafel mit schwarzem P oder eine rechteckige schwarze Tafel mit weißem Rand und weißem P.", "sig": ["bue4"], "group": "Bü"}, {"difficulty": "mittel", "question": "Wie sieht Bü 5 (Läutetafel) aus?", "answer": "Eine rechteckige weiße Tafel mit schwarzem L.", "sig": ["bue5"], "group": "Bü"}, {"difficulty": "mittel", "question": "Wie sieht Lf 1 aus (Tageszeichen und Nachtzeichen)?", "answer": "Tageszeichen: auf der Spitze stehende dreieckige gelbe Scheibe mit weißem Rand und schwarzer Kennziffer (bei beschränktem Raum kann die Spitze nach oben zeigen). Nachtzeichen: unter dem beleuchteten Tageszeichen zwei schräg nach links steigende gelbe Lichter (bei beschränktem Raum vor dem Tageszeichen).", "sig": ["lf1", "lf1_nacht"], "group": "Lf"}, {"difficulty": "mittel", "question": "Wie sieht Lf 2 (Anfangscheibe) aus?", "answer": "Eine rechteckige, auf der Schmalseite stehende oder quadratische gelbe Scheibe mit weißem Rand und schwarzem A.", "sig": ["lf2"], "group": "Lf"}, {"difficulty": "mittel", "question": "Wie sieht Lf 3 (Endscheibe) aus?", "answer": "Eine rechteckige, auf der Schmalseite stehende oder quadratische weiße Scheibe mit schwarzem E.", "sig": ["lf3"], "group": "Lf"}, {"difficulty": "mittel", "question": "Wie sieht Lf 4 (Geschwindigkeitstafel) aus?", "answer": "Eine auf der Spitze stehende dreieckige weiße Tafel mit schwarzem Rand und schwarzer Kennziffer. Bei beschränktem Raum kann die Dreieckspitze nach oben zeigen.", "sig": ["lf4"], "group": "Lf"}, {"difficulty": "mittel", "question": "Wie sieht Lf 5 (Anfangstafel) aus?", "answer": "Eine rechteckige, auf der Schmalseite stehende weiße Tafel mit schwarzem A.", "sig": ["lf5"], "group": "Lf"}, {"difficulty": "mittel", "question": "Wie sieht Lf 6 aus?", "answer": "Eine auf der Spitze stehende, schwarz- und weiß umrandete dreieckige gelbe Tafel mit schwarzer Kennziffer.", "sig": ["lf6"], "group": "Lf"}, {"difficulty": "mittel", "question": "Wie sieht Lf 7 aus?", "answer": "Eine rechteckige, auf der Schmalseite stehende oder quadratische weiße Tafel mit schwarzem Rand und schwarzer Kennziffer.", "sig": ["lf7"], "group": "Lf"}, {"difficulty": "mittel", "question": "Was bedeutet die Kennziffer bei den Lf-Signalen?", "answer": "Der 10fache Wert in km/h (z. B. Kennziffer 6 = 60 km/h).", "sig": ["lf7"], "group": "Lf"}, {"difficulty": "schwer", "question": "Wo stehen Überwachungssignale bei den Eisenbahnen des Bundes?", "answer": "In der Regel im Abstand des Bremsweges der Strecke vor dem Bahnübergang.", "sig": ["bue0"], "group": "Bü"}, {"difficulty": "schwer", "question": "Wo stehen Überwachungssignale bei nichtbundeseigenen Eisenbahnen?", "answer": "In der Regel in einem für das Abbremsen ausreichenden Abstand rechts neben dem Gleis. Auf Anordnung des Betriebsleiters auch links sowie unmittelbar vor dem Bahnübergang.", "sig": ["bue0"], "group": "Bü"}, {"difficulty": "schwer", "question": "Wie wird ein Überwachungssignal im verkürzten Bremswegabstand gekennzeichnet?", "answer": "Durch ein rückstrahlendes, auf der Spitze stehendes weißes Dreieck mit schwarzem Rand. Gilt bei Eisenbahnen des Bundes, wenn der Abstand um mehr als 5 % kürzer ist als der Bremsweg der Strecke.", "sig": ["bue_kurz"], "group": "Bü"}, {"difficulty": "schwer", "question": "Wie wird ein Überwachungssignalwiederholer gekennzeichnet?", "answer": "Durch eine weiß umrandete schwarze quadratische Tafel mit runder weißer Scheibe.", "sig": ["bue_wdh"], "group": "Bü"}, {"difficulty": "schwer", "question": "Was gilt für die Pfeiftafel (Bü 4), wenn zwischen Bü 4 und dem Bahnübergang ein Halteplatz liegt?", "answer": "Über der vor dem Halteplatz stehenden Pfeiftafel ist eine rechteckige weiße Tafel mit zwei senkrechten schwarzen Streifen angebracht. Die Pfeiftafel gilt nur für Züge, die vor dem Bahnübergang nicht halten.", "sig": ["bue4_halt"], "group": "Bü"}, {"difficulty": "schwer", "question": "Was zeigt die gelbe, schwarz umrandete Bü-Ankündetafel?", "answer": "Sie steht am Anfang der Einschaltstrecke und weist auf die Lage des zugehörigen Bahnübergangs mit Blinklichtern oder Lichtzeichen hin.", "sig": ["ankuende"], "group": "Bü"}, {"difficulty": "schwer", "question": "Was zeigt die weiße Bü-Kennzeichentafel?", "answer": "Sie steht unmittelbar vor dem zugehörigen Bahnübergang mit Blinklichtern oder Lichtzeichen (bei einer Ankündigung durch die Bü-Ankündetafel).", "sig": ["kennz"], "group": "Bü"}, {"difficulty": "schwer", "question": "Wie wird der Anfang einer gemeinsamen Einschaltstrecke für mehrere Bahnübergänge angezeigt?", "answer": "Durch eine weiße rückstrahlende Tafel mit schwarzer Aufschrift „Bü/Bü“ über der Bü-Ankündetafel für den ersten zugehörigen Bahnübergang.", "sig": ["buebue"], "group": "Bü"}, {"difficulty": "schwer", "question": "Was ist innerhalb einer gemeinsamen Einschaltstrecke vor jedem zugehörigen Bahnübergang aufgestellt?", "answer": "Außer der Bü-Kennzeichentafel die Bü-Ankündetafel für den folgenden zugehörigen Bahnübergang. Der letzte Bahnübergang ist nur mit einer Bü-Kennzeichentafel gekennzeichnet.", "sig": ["innerhalb"], "group": "Bü"}, {"difficulty": "schwer", "question": "Für wen gelten die Signale Lf 1, Lf 2 und Lf 3?", "answer": "Für Züge und Rangierfahrten. Sie sind nicht ortsfest und dürfen bei den Eisenbahnen des Bundes nur auf besonderen Auftrag des Eisenbahninfrastrukturunternehmers aufgestellt werden.", "sig": ["lf1", "lf2", "lf3"], "group": "Lf"}, {"difficulty": "schwer", "question": "Wann werden keine Langsamfahrsignale aufgestellt?", "answer": "Wenn die reduzierte Geschwindigkeit nur für einzelne Zuggattungen bzw. Züge gilt. Dann gibt das Infrastrukturunternehmen die Geschwindigkeitsreduzierung den betroffenen Zügen schriftlich bekannt.", "sig": [], "group": "Lf"}, {"difficulty": "schwer", "question": "Wie wird Lf 1 bzw. Lf 6 ergänzt, wenn die Langsamfahrstelle nach einer Strecken- oder Fahrwegverzweigung beginnt?", "answer": "Durch einen gelben Richtungspfeil mit schwarzem Rand, der anzeigt, für welche Richtung die Geschwindigkeitsbeschränkung gilt. Bei Lf 2 wird der Richtungspfeil wiederholt, wenn auch Lf 2 vor der Verzweigung steht.", "sig": ["lf1_pfeil", "lf6_pfeil"], "group": "Lf"}, {"difficulty": "schwer", "question": "Was bedeutet die Tafel „BÜ“ unter Lf 3 bzw. Lf 7?", "answer": "Die Geschwindigkeit darf erhöht werden, wenn das führende Fahrzeug die Mitte des Bahnübergangs erreicht hat.", "sig": ["lf3_bue", "lf7_bue"], "group": "Lf"}, {"difficulty": "schwer", "question": "Wo wird Lf 4 aufgestellt?", "answer": "1) Wo die zulässige Geschwindigkeit vor der ständigen Langsamfahrstelle um 25 % und mehr größer ist als auf der Langsamfahrstelle. 2) Wo am Vorsignal angezeigt werden soll, dass vom zugehörigen Hauptsignal ab bei Hp 1 die angezeigte Geschwindigkeit nicht überschritten werden darf. 3) Wo die Geschwindigkeit vor Bahnübergängen ermäßigt werden muss.", "sig": ["lf4"], "group": "Lf"}, {"difficulty": "schwer", "question": "Wo wird Lf 5 aufgestellt?", "answer": "Nur auf Nebenbahnen, dort wo es erforderlich ist, vor Bahnübergängen die Stelle besonders zu kennzeichnen, von der ab die mit Lf 4 angezeigte Geschwindigkeit gilt.", "sig": ["lf5"], "group": "Lf"}, {"difficulty": "schwer", "question": "Bis wann gilt die Geschwindigkeitsbeschränkung vor einem Bahnübergang (Lf 4)?", "answer": "Sie muss am Signal Lf 5 (wo es nicht aufgestellt ist: vor dem Bahnübergang) durchgeführt sein und ist beizubehalten, bis das erste Fahrzeug etwa die Straßenmitte erreicht hat.", "sig": ["lf4", "lf5"], "group": "Lf"}, {"difficulty": "schwer", "question": "Wann gilt ein an einem Hauptsignal aufgestelltes Lf 7?", "answer": "Nur bei Stellung Hp 1, Ks 1 ohne Zs 3 oder Ks 2 ohne Zs 3.", "sig": ["lf7"], "group": "Lf"}, {"difficulty": "schwer", "question": "Wann liegt ein zu signalisierender Geschwindigkeitswechsel (Lf 7) auch vor?", "answer": "Wenn an Abzweigstellen und an Streckenverzweigungen in Bahnhöfen beim Übergang von einer Strecke auf eine andere eine Geschwindigkeitsänderung zu beachten ist.", "sig": [], "group": "Lf"}, {"difficulty": "schwer", "question": "Wie werden Lf-Signale bei Dunkelheit sichtbar gemacht?", "answer": "Sie sind bei Dunkelheit beleuchtet oder rückstrahlend. Bei Lf 1 zeigt das Nachtzeichen zwei schräg nach links steigende gelbe Lichter; eine rückstrahlende gelbe Scheibe ist dann nicht beleuchtet.", "sig": ["lf1_nacht"], "group": "Lf"}, {"difficulty": "leicht", "question": "Vr 0 (Vorsignalbegriff) – Was bedeutet das Signal?", "answer": "Halt erwarten", "sig": ["vr0_form", "vr0_licht"], "look": "Formsignal – Tageszeichen: Die runde Scheibe steht senkrecht. Wo ein Flügel vorhanden ist, zeigt er senkrecht nach unten. Nachtzeichen: Zwei gelbe Lichter nach rechts steigend.\nLichtsignal: Zwei gelbe Lichter nach rechts steigend.", "group": "Vr"}, {"difficulty": "leicht", "question": "Vr 1 (Vorsignalbegriff) – Was bedeutet das Signal?", "answer": "Fahrt erwarten", "sig": ["vr1_form", "vr1_licht"], "look": "Formsignal – Tageszeichen: Die runde Scheibe liegt waagerecht. Wo ein Flügel vorhanden ist, zeigt er senkrecht nach unten. Nachtzeichen: Zwei grüne Lichter nach rechts steigend.\nLichtsignal: Zwei grüne Lichter nach rechts steigend.", "group": "Vr"}, {"difficulty": "leicht", "question": "Vr 2 (Vorsignalbegriff) – Was bedeutet das Signal?", "answer": "Langsamfahrt erwarten", "sig": ["vr2_form", "vr2_licht"], "look": "Formsignal – Tageszeichen: Die runde Scheibe steht senkrecht, der Flügel zeigt schräg nach rechts abwärts. Nachtzeichen: Ein gelbes Licht und nach rechts steigend ein grünes Licht.\nLichtsignal: Ein gelbes Licht und nach rechts steigend ein grünes Licht.", "group": "Vr"}, {"difficulty": "leicht", "question": "Hp 0 (Hauptsignalbegriff) – Was bedeutet das Signal?", "answer": "Halt", "sig": ["hp0_form", "hp0_licht1", "hp0_licht2"], "look": "Formsignal – Tageszeichen: Ein Signalflügel (bei zweiflügeligen Signalen der obere Flügel) zeigt waagerecht nach rechts. Nachtzeichen: Ein rotes Licht.\nLichtsignal: Ein rotes oder zwei rote Lichter nebeneinander.\nHp 0 wird am Hauptsignal oder auch am Lichtsperrsignal gezeigt.", "group": "Hp"}, {"difficulty": "leicht", "question": "Hp 1 (Hauptsignalbegriff) – Was bedeutet das Signal?", "answer": "Fahrt", "sig": ["hp1_form", "hp1_licht"], "look": "Formsignal – Tageszeichen: Ein Signalflügel (bei zweiflügeligen Signalen der obere Flügel) zeigt schräg nach rechts aufwärts. Nachtzeichen: Ein grünes Licht.\nLichtsignal: Ein grünes Licht.", "group": "Hp"}, {"difficulty": "leicht", "question": "Hp 2 (Hauptsignalbegriff) – Was bedeutet das Signal?", "answer": "Langsamfahrt", "sig": ["hp2_form", "hp2_licht"], "look": "Formsignal – Tageszeichen: Zwei Signalflügel zeigen schräg nach rechts aufwärts. Nachtzeichen: Ein grünes Licht und senkrecht darunter ein gelbes Licht.\nLichtsignal: Ein grünes Licht und senkrecht darunter ein gelbes Licht.", "group": "Hp"}, {"difficulty": "leicht", "question": "Ks 1 (Kombinationssignal) – Was bedeutet das Signal?", "answer": "Fahrt", "sig": ["ks1_haupt", "ks1_vor"], "look": "Ein grünes Licht. Am Vorsignal sind die Signaloptiken quer, am Hauptsignal senkrecht angebracht.", "group": "Ks"}, {"difficulty": "leicht", "question": "Ks 2 (Kombinationssignal) – Was bedeutet das Signal?", "answer": "Halt erwarten – das Signal erlaubt die Vorbeifahrt (am Hauptsignal) und kündigt Halt an.", "sig": ["ks2_vor", "ks2_haupt_vf"], "look": "Ein gelbes Licht. Am Vorsignal sind die Signaloptiken quer, am Hauptsignal (mit Vorsignalfunktion) drei Signaloptiken angebracht.", "group": "Ks"}, {"difficulty": "mittel", "question": "Wie sieht Vr 0 aus?", "answer": "Formsignal – Tageszeichen: Die runde Scheibe steht senkrecht. Wo ein Flügel vorhanden ist, zeigt er senkrecht nach unten. Nachtzeichen: Zwei gelbe Lichter nach rechts steigend. Lichtsignal: Zwei gelbe Lichter nach rechts steigend.", "sig": ["vr0_form", "vr0_licht"], "group": "Vr"}, {"difficulty": "mittel", "question": "Wie sieht Vr 1 aus?", "answer": "Formsignal – Tageszeichen: Die runde Scheibe liegt waagerecht. Wo ein Flügel vorhanden ist, zeigt er senkrecht nach unten. Nachtzeichen: Zwei grüne Lichter nach rechts steigend. Lichtsignal: Zwei grüne Lichter nach rechts steigend.", "sig": ["vr1_form", "vr1_licht"], "group": "Vr"}, {"difficulty": "mittel", "question": "Wie sieht Vr 2 aus?", "answer": "Formsignal – Tageszeichen: Die runde Scheibe steht senkrecht, der Flügel zeigt schräg nach rechts abwärts. Nachtzeichen: Ein gelbes Licht und nach rechts steigend ein grünes Licht. Lichtsignal: Ein gelbes Licht und nach rechts steigend ein grünes Licht.", "sig": ["vr2_form", "vr2_licht"], "group": "Vr"}, {"difficulty": "mittel", "question": "Wie sieht Hp 0 aus?", "answer": "Formsignal – Tageszeichen: Ein Signalflügel (bei zweiflügeligen Signalen der obere Flügel) zeigt waagerecht nach rechts. Nachtzeichen: Ein rotes Licht. Lichtsignal: Ein rotes oder zwei rote Lichter nebeneinander. Hp 0 wird am Hauptsignal oder auch am Lichtsperrsignal gezeigt.", "sig": ["hp0_form", "hp0_licht1", "hp0_licht2"], "group": "Hp"}, {"difficulty": "mittel", "question": "Wie sieht Hp 1 aus?", "answer": "Formsignal – Tageszeichen: Ein Signalflügel (bei zweiflügeligen Signalen der obere Flügel) zeigt schräg nach rechts aufwärts. Nachtzeichen: Ein grünes Licht. Lichtsignal: Ein grünes Licht.", "sig": ["hp1_form", "hp1_licht"], "group": "Hp"}, {"difficulty": "mittel", "question": "Wie sieht Hp 2 aus?", "answer": "Formsignal – Tageszeichen: Zwei Signalflügel zeigen schräg nach rechts aufwärts. Nachtzeichen: Ein grünes Licht und senkrecht darunter ein gelbes Licht. Lichtsignal: Ein grünes Licht und senkrecht darunter ein gelbes Licht.", "sig": ["hp2_form", "hp2_licht"], "group": "Hp"}, {"difficulty": "mittel", "question": "Wie sieht Ks 1 aus?", "answer": "Ein grünes Licht. Am Vorsignal sind die Signaloptiken quer, am Hauptsignal senkrecht angebracht.", "sig": ["ks1_haupt", "ks1_vor"], "group": "Ks"}, {"difficulty": "mittel", "question": "Wie sieht Ks 2 aus?", "answer": "Ein gelbes Licht. Am Vorsignal sind die Signaloptiken quer, am Hauptsignal (mit Vorsignalfunktion) drei Signaloptiken angebracht.", "sig": ["ks2_vor", "ks2_haupt_vf"], "group": "Ks"}, {"difficulty": "mittel", "question": "Was zeigen Vorsignale an?", "answer": "Welches Signalbild am zugehörigen Hauptsignal zu erwarten ist.", "group": "Vr"}, {"difficulty": "mittel", "question": "Was zeigen Hauptsignale an?", "answer": "Ob der anschließende Gleisabschnitt befahren werden darf.", "group": "Hp"}, {"difficulty": "mittel", "question": "Was ist ein Wärtervorsignal?", "answer": "Ein ortsfestes Vorsignal ohne bewegliche Elemente. Es kennzeichnet den Beginn des Bremswegabstandes zu einem Hauptsignal. Auf dem Foto der Präsentation: runde orange Scheibe mit schwarzem Rand, dazu zwei orange Lampen.", "sig": ["waerter"], "group": "Vr"}, {"difficulty": "mittel", "question": "Wie wird ein alleinstehendes Vorsignal gekennzeichnet?", "answer": "Mit der Vorsignaltafel (Signal Ne 2). In der Präsentation: weiße, rechteckige Tafel mit schwarzem Kreuz.", "sig": ["ne2"], "group": "Vr"}, {"difficulty": "mittel", "question": "Wie sehen Vorsignalbaken (Ne 3) aus und wofür stehen sie?", "answer": "Weiße Tafeln mit schrägen schwarzen Balken: drei, zwei und ein Balken. Sie kündigen das Vorsignal an. Abstände laut Präsentation: 75 m zwischen der ersten und zweiten Bake, 75 m zwischen der zweiten und dritten Bake, 100 m von der letzten Bake bis zum Vorsignal.", "sig": ["ne3"], "group": "Vr"}, {"difficulty": "mittel", "question": "Als was können Kombinationssignale (Ks) verwendet werden, und woran erkennt man das?", "answer": "Als Vorsignal: Signaloptiken quer angebracht, Vorsignaltafel Ne 2 (außer beim Vorsignalwiederholer). Als Hauptsignal: Signaloptiken senkrecht angebracht, Mastschild. Als Hauptsignal mit Vorsignalfunktion: drei Signaloptiken, Mastschild und ein gelbes Dreieck für die Vorsignalfunktion.", "sig": ["ks1_vor", "ks1_haupt", "ks2_haupt_vf"], "group": "Ks"}, {"difficulty": "schwer", "question": "Welche Arten von Vorsignalen gibt es?", "answer": "Ortsfeste Licht- oder Formsignale oder Wärtersignale.", "sig": ["vr0_licht", "vr0_form", "waerter"], "group": "Vr"}, {"difficulty": "schwer", "question": "Wie sind Licht- und Formvorsignale aufgebaut?", "answer": "Lichtsignale mit einem oder zwei Lichtern als Tages- und Nachtzeichen, oder Formsignale mit einer klappbaren gelben runden Scheibe (schwarzer Ring mit weißem Rand). Unter der Scheibe kann sich ein beweglicher pfeilförmiger Flügel befinden.", "sig": ["vr0_form", "vr0_licht"], "group": "Vr"}, {"difficulty": "schwer", "question": "Wie lange müssen die Nachtzeichen der Formhauptsignale leuchten?", "answer": "In der Regel so lange, wie Züge in die betreffende Fahrtrichtung verkehren.", "group": "Vr"}, {"difficulty": "schwer", "question": "In welchem Abstand stehen Vorsignale zum zugehörigen Hauptsignal?", "answer": "Im Bremswegabstand der Strecke laut „StreBu“.", "group": "Vr"}, {"difficulty": "schwer", "question": "Wie wird ein Lichtvorsignal im verkürzten Bremswegabstand gekennzeichnet?", "answer": "Steht es in einem um mehr als 5 % verkürzten Bremswegabstand der Strecke, so ist es mit einem weißen Zusatzlicht links in Höhe des rechten Signallichts kenntlich.", "sig": ["vr_kurz"], "group": "Vr"}, {"difficulty": "schwer", "question": "Wie wird eine alleinstehende Vorsignaltafel (Ne 2) im verkürzten Bremswegabstand gekennzeichnet?", "answer": "Mit einem weißen Dreieck, das auf der Spitze steht. Es gilt bei einem um mehr als 5 % verkürzten Bremswegabstand.", "sig": ["ne2_kurz"], "group": "Vr"}, {"difficulty": "schwer", "question": "Was ist ein Vorsignalwiederholer?", "answer": "Ist die Sicht auf ein Hauptsignal behindert, kann das Lichtvorsignal wiederholt sein. Der Vorsignalwiederholer zeigt das gleiche Signalbild wie das zurückgelegene Vorsignal und ist durch ein weißes Zusatzlicht gekennzeichnet. Er hat keine Vorsignaltafel und wird nicht durch Vorsignalbaken (Ne 3) angekündigt.", "sig": ["vr_wdh"], "group": "Vr"}, {"difficulty": "schwer", "question": "Welche Signalarten gibt es bei Hauptsignalen?", "answer": "Lichtsignale mit einem oder zwei Lichtern als Tages- und Nachtzeichen, oder Formsignale mit einem oder zwei Flügeln als Tageszeichen und ebenso vielen Lichtern als Nachtzeichen.", "sig": ["hp0_licht2", "hp0_form"], "group": "Hp"}, {"difficulty": "schwer", "question": "Als was werden Hauptsignale verwendet?", "answer": "Signale des Bahnhofs: Einfahrsignale (Esig), Zwischensignale (Zsig), Ausfahrsignale (Asig). Signale der freien Strecke: Blocksignale (Bksig), Deckungssignale (Dksig).", "group": "Hp"}, {"difficulty": "schwer", "question": "Wo stehen Hauptsignale im Verhältnis zum Gleis?", "answer": "Im Bahnhof rechts vom Gleis. Auf der freien Strecke: bei eingleisigen Strecken rechts vom Gleis, bei zweigleisigen Strecken rechts vom Regelgleis und links vom Gegengleis.", "group": "Hp"}, {"difficulty": "schwer", "question": "Wie sind Licht- und Formhauptsignale gekennzeichnet?", "answer": "Lichthauptsignale durch Mastschilder. Die Maste der Formhauptsignale sind zur besseren Erkennbarkeit rot-weiß gekennzeichnet (Mastblech, nicht Mastschild).", "sig": ["hp1_licht", "hp1_form"], "group": "Hp"}, {"difficulty": "schwer", "question": "Wie können Lichthauptsignal und Lichtvorsignal angeordnet sein?", "answer": "An einem gemeinsamen Signalträger. Das Hauptsignal befindet sich immer über dem Vorsignal, und es wird keine Vorsignaltafel aufgestellt.", "group": "Hp"}, {"difficulty": "schwer", "question": "In welchem Abstand stehen mehrere Signale mit gemeinsamem Signalträger?", "answer": "1000 m bis 1300 m (Bezugsgröße ist ein Bremswegabstand von 1000 m). Der Abstand darf den Bremswegabstand um bis zu 50 % überschreiten.", "group": "Hp"}, {"difficulty": "schwer", "question": "Wann ist das Vorsignal am gemeinsamen Signalträger dunkel geschaltet?", "answer": "Bei „Hp 0“ oder wenn das Vorsignal für den folgenden Fahrweg nicht benötigt wird.", "group": "Hp"}, {"difficulty": "schwer", "question": "Wie wird ein Hauptsignal identifiziert?", "answer": "Es hat einen eindeutigen Signalnamen, der gegenüber dem Fahrdienstleiter immer anzugeben ist (Beispiel in der Präsentation: Signal „Gustav“).", "group": "Hp"}, {"difficulty": "schwer", "question": "Für wen gilt Hp 0?", "answer": "Für Zug- und Rangierfahrten. Vor „Halt“ müssen alle Fahrtbewegungen anhalten.", "sig": ["hp0_licht2"], "group": "Hp"}, {"difficulty": "schwer", "question": "Für wen gelten Hp 1 und Hp 2?", "answer": "Nur für Zugfahrten. Eine Zugfahrt ist nach Fahrplan verkehrend und hat sich zuvor „Fahrbereit“ beim Fahrdienstleiter fertig gemeldet.", "sig": ["hp1_licht", "hp2_licht"], "group": "Hp"}, {"difficulty": "schwer", "question": "Was gilt für Rangierfahrten vor Hauptsignalen?", "answer": "Eine Rangierfahrt muss vor Hauptsignalen in „Fahrtstellung“ anhalten. Zeigt ein Hauptsignal bei Annäherung noch Fahrt, ist anzuhalten und das Signal „Hp 0“ abzuwarten. Für die Vorbeifahrt an einem Hauptsignal ist immer die Zustimmung des Weichenwärters erforderlich.", "group": "Hp"}, {"difficulty": "schwer", "question": "Mit welcher Geschwindigkeit darf der Tf bei Hp 1 fahren?", "answer": "Mit der Geschwindigkeit, die im Buchfahrplan angegeben ist. Das gilt nur, wenn es nicht durch andere Signale oder durch schriftliche Anweisungen anders geregelt ist.", "sig": ["hp1_licht"], "group": "Hp"}, {"difficulty": "schwer", "question": "Mit welcher Geschwindigkeit darf der Tf bei Hp 2 fahren?", "answer": "Mit höchstens 40 km/h in den anschließenden Weichenbereich, wenn dies durch andere Signale oder Einträge im Buchfahrplan/La nicht verschärft oder gelockert wurde.", "sig": ["hp2_licht"], "group": "Hp"}, {"difficulty": "schwer", "question": "Wie kann Hp 2 verschärft oder gelockert werden?", "answer": "Durch einen Eintrag im Buchfahrplan („E 50/60“, „Z 50/60“ oder „A 50/60“), durch das Signal Zs 3 oder durch einen La-Eintrag.", "sig": ["zs3"], "group": "Hp"}, {"difficulty": "schwer", "question": "Was erlaubt Ks 2 am Hauptsignal?", "answer": "Es erlaubt die Vorbeifahrt am Hauptsignal und kündigt Halt an. Die Geschwindigkeit richtet sich nach dem Buchfahrplan Spalte 2, wenn sie nicht durch andere Signale oder Einträge eingeschränkt ist.", "sig": ["ks2_haupt_vf"], "group": "Ks"}, {"difficulty": "schwer", "question": "Wann zeigt ein Vorsignalwiederholer bei Ks ein weißes Zusatzlicht unter dem Signallicht?", "answer": "Bei „Ks 1 + Zs 3v“ und bei „Ks 2“. Bei „Ks 1“ ohne weitere Einschränkungen leuchtet das untere Zusatzlicht nicht.", "sig": ["ks_wdh"], "group": "Ks"}, {"difficulty": "leicht", "question": "El 1v – Was bedeutet das Signal?", "answer": "Signal El 1 erwarten.", "sig": ["el1v"], "look": "Zwei weiße Rechtecke waagerecht nebeneinander.", "group": "El"}, {"difficulty": "leicht", "question": "El 1 (Ausschaltsignal) – Was bedeutet das Signal?", "answer": "Ausschalten.", "sig": ["el1"], "look": "Ein zerlegtes weißes U.", "group": "El"}, {"difficulty": "leicht", "question": "El 2 (Einschaltsignal) – Was bedeutet das Signal?", "answer": "Einschalten erlaubt.", "sig": ["el2"], "look": "Ein geschlossenes weißes U.", "group": "El"}, {"difficulty": "leicht", "question": "El 3 („Bügel ab“-Ankündesignal) – Was bedeutet das Signal?", "answer": "Signal „Bügel ab“ erwarten.", "sig": ["el3"], "look": "Zwei in der Höhe gegeneinander versetzte weiße Streifen.", "group": "El"}, {"difficulty": "leicht", "question": "El 4 („Bügel ab“-Signal) – Was bedeutet das Signal?", "answer": "Bügel ab.", "sig": ["el4"], "look": "Ein waagerechter weißer Streifen.", "group": "El"}, {"difficulty": "leicht", "question": "El 5 („Bügel an“-Signal) – Was bedeutet das Signal?", "answer": "Bügel an.", "sig": ["el5"], "look": "Ein senkrechter weißer Streifen.", "group": "El"}, {"difficulty": "leicht", "question": "El 6 – Was bedeutet das Signal?", "answer": "Halt für Fahrzeuge mit gehobenen Stromabnehmern.", "sig": ["el6"], "look": "Ein auf der Spitze stehender quadratischer weißer Rahmen mit innenliegendem weißem Quadrat.", "group": "El"}, {"difficulty": "mittel", "question": "Wie sieht El 1v aus?", "answer": "Zwei weiße Rechtecke waagerecht nebeneinander.", "sig": ["el1v"], "group": "El"}, {"difficulty": "mittel", "question": "Wie sieht El 1 aus?", "answer": "Ein zerlegtes weißes U.", "sig": ["el1"], "group": "El"}, {"difficulty": "mittel", "question": "Wie sieht El 2 aus?", "answer": "Ein geschlossenes weißes U.", "sig": ["el2"], "group": "El"}, {"difficulty": "mittel", "question": "Wie sieht El 3 aus?", "answer": "Zwei in der Höhe gegeneinander versetzte weiße Streifen.", "sig": ["el3"], "group": "El"}, {"difficulty": "mittel", "question": "Wie sieht El 4 aus?", "answer": "Ein waagerechter weißer Streifen.", "sig": ["el4"], "group": "El"}, {"difficulty": "mittel", "question": "Wie sieht El 5 aus?", "answer": "Ein senkrechter weißer Streifen.", "sig": ["el5"], "group": "El"}, {"difficulty": "mittel", "question": "Wie sieht El 6 aus?", "answer": "Ein auf der Spitze stehender quadratischer weißer Rahmen mit innenliegendem weißem Quadrat.", "sig": ["el6"], "group": "El"}, {"difficulty": "mittel", "question": "Wie ist die Zusatztafel bei einem Systemwechsel (El 2) aufgebaut?", "answer": "Auf der Zusatztafel befindet sich eine weiße Sinuskurve (Wechselstromsystem-Anfang) oder zwei waagerechte weiße Streifen (Gleichstromsystem-Anfang). Über der Sinuskurve kann eine Zahl (Spannung) gezeigt werden.", "sig": ["el2_ac", "el2_dc"], "group": "El"}, {"difficulty": "mittel", "question": "Was zeigt die Zusatztafel mit Kennbuchstaben bei El 3 und El 4?", "answer": "Einen weißen Kennbuchstaben. Er gibt an, für welche Fahrtrichtung das Signal El 3 oder El 4 gilt. Der Infrastrukturunternehmer gibt die verwendeten Kennbuchstaben bekannt; sie sind in den örtlichen Zusätzen enthalten.", "sig": ["el3_b", "el4_b"], "group": "El"}, {"difficulty": "mittel", "question": "Was gilt, wenn El 3 und El 4 für mehrere Fahrtrichtungen zu beachten sind?", "answer": "Die Signale können mit zwei Zusatztafeln ergänzt sein. Diese Zusatztafeln sind ein Drittel kleiner als die Signaltafel. Die Kennbuchstaben können auch in einer Zusatztafel übereinander gezeigt werden.", "sig": ["el4_b2", "el4_bl"], "group": "El"}, {"difficulty": "mittel", "question": "Was zeigt die Zusatztafel bei El 6 (Profilwechsel)?", "answer": "Eine weiße Länderkennung (z. B. „D“ für Deutschland oder „CH“ für Schweiz). Darunter kann die Spannung der Fahrleitung gezeigt werden. El 6 mit Zusatztafel gilt nur für Fahrzeuge, deren gehobener Stromabnehmer der angezeigten nationalen Bauart entspricht.", "sig": ["el6_d", "el6_ch"], "group": "El"}, {"difficulty": "schwer", "question": "Welche Fahrleitungssignale (El 1v, El 1, El 2) sind ortsfest, und wann gibt es veränderliche?", "answer": "Die Signale El 1v, El 1 und El 2 sind ortsfest. Wo Fahrleitungs-Schutzstrecken nur zeitweilig das Ausschalten der Triebfahrzeuge erfordern, ist für die Einfahrt in die Schutzstrecke ein veränderliches Aus- und Einschaltsignal (El 1/El 2) vorhanden.", "group": "El"}, {"difficulty": "schwer", "question": "Wo steht El 1v, und wann wird es nicht gezeigt?", "answer": "El 1v befindet sich grundsätzlich im halben Abstand des Bremswegs der Strecke vor dem Signal El 1. Bei einfachen örtlichen Verhältnissen wird es nicht gezeigt.", "sig": ["el1v"], "group": "El"}, {"difficulty": "schwer", "question": "Was gilt am Signal El 1?", "answer": "Am Signal muss das Ausschalten beendet sein.", "sig": ["el1"], "group": "El"}, {"difficulty": "schwer", "question": "Was gilt, wenn El 1 und El 2 am gleichen Standort stehen?", "answer": "El 1 kann mit El 2 am gleichen Standort vereinigt sein; El 2 befindet sich dann über El 1. Das Triebfahrzeug muss spätestens am Standort des Signals ausgeschaltet sein und darf nach der Vorbeifahrt am Signal und Wiederkehr der Fahrleitungsspannung wieder eingeschaltet werden. Die vereinigten Signale El 1 und El 2 sind bei Dunkelheit beleuchtet.", "sig": ["el1_el2"], "group": "El"}, {"difficulty": "schwer", "question": "Wann darf das Triebfahrzeug nach El 2 wieder eingeschaltet werden?", "answer": "Nach der Vorbeifahrt am Signal. Bei einem Systemwechsel (Zusatztafel) darf das Triebfahrzeug erst nach dem Systemwechsel wieder eingeschaltet werden.", "sig": ["el2"], "group": "El"}, {"difficulty": "schwer", "question": "Wo kann das Einschaltsignal El 2 außerhalb der DB AG stehen?", "answer": "Auf eingleisigen Strecken unmittelbar links neben dem Gleis.", "group": "El"}, {"difficulty": "schwer", "question": "Wo steht El 3, und was kündigt es an?", "answer": "El 3 kündigt das „Bügel ab“-Signal (El 4) an. Es befindet sich in der Regel im halben Abstand des Bremswegs der Strecke vor dem „Bügel ab“-Signal.", "sig": ["el3"], "group": "El"}, {"difficulty": "schwer", "question": "Wann wird El 3 wiederholt?", "answer": "Wenn Züge hinter dem Signal El 3 beginnen oder ihre Fahrt fortsetzen, ist ein zweites Signal El 3 aufgestellt. Der Standort des zweiten Signals wird in der La bekannt gegeben.", "group": "El"}, {"difficulty": "schwer", "question": "Was kennzeichnet El 4, und wo steht es?", "answer": "El 4 kennzeichnet den Beginn eines Gleisabschnitts, der nur mit gesenkten Stromabnehmern befahren werden darf. Am Signal müssen die Stromabnehmer völlig gesenkt sein. Das Signal befindet sich 30 m vor dem mit gesenkten Stromabnehmern zu befahrenden Fahrleitungs-Abschnitt.", "sig": ["el4"], "group": "El"}, {"difficulty": "schwer", "question": "Was kennzeichnet El 5, und wo steht es?", "answer": "El 5 kennzeichnet das Ende eines Gleisabschnitts, der mit gesenkten Stromabnehmern befahren werden muss. Das Signal befindet sich 30 m hinter dem mit gesenkten Stromabnehmern zu befahrenden Fahrleitungs-Abschnitt.", "sig": ["el5"], "group": "El"}, {"difficulty": "schwer", "question": "Wann dürfen nach El 5 die Stromabnehmer wieder angelegt werden?", "answer": "Nach Vorbeifahrt am Signal. Der Triebfahrzeugführer darf mit dem Anlegen erst beginnen, wenn das Triebfahrzeug am Signal vorbeigefahren ist. Bei einem Systemwechsel (Zusatztafel) dürfen die Stromabnehmer erst nach dem Systemwechsel wieder angelegt werden.", "sig": ["el5"], "group": "El"}, {"difficulty": "schwer", "question": "Welche Ausnahme gilt beim Anlegen des Stromabnehmers vor El 5?", "answer": "Ist es für das Anfahren eines zum Halten gekommenen Triebfahrzeuges erforderlich, darf in bestimmten Gleisen der Stromabnehmer vor dem Signal El 5 gehoben werden, wenn sich der Fahrdraht im Arbeitsbereich des Stromabnehmers befindet. Die betreffenden Gleise sind in den örtlichen Zusätzen angegeben.", "group": "El"}, {"difficulty": "schwer", "question": "Wo kann das „Bügel an“-Signal (El 5) außerhalb der DB AG stehen?", "answer": "Auf eingleisigen Strecken unmittelbar links neben dem Gleis.", "group": "El"}, {"difficulty": "schwer", "question": "Was kann außerhalb der DB AG auf der Rückseite von El 4 gezeigt werden?", "answer": "Das Signal El 4 kann auf der Rückseite das Signal El 5 zeigen.", "group": "El"}, {"difficulty": "schwer", "question": "Was gilt für El 3, El 4 und El 5 bezüglich Standort, Geltung und Beleuchtung?", "answer": "Die Signale können auch nicht ortsfest sein. Gelten sie für bestimmte Gleise oder Fahrtrichtungen nicht, ist dies in den örtlichen Zusätzen bekannt gegeben. Sie sind bei Dunkelheit beleuchtet; bei einfachen Verhältnissen kann darauf verzichtet werden.", "group": "El"}, {"difficulty": "schwer", "question": "Was ist am Signal El 6 verboten?", "answer": "Fahrten über das Signal hinaus sind für Triebfahrzeuge mit gehobenen Stromabnehmern verboten.", "sig": ["el6"], "group": "El"}, {"difficulty": "schwer", "question": "Wer regelt das Vorbeifahren der Spitze eines Triebfahrzeugs mit gehobenem Stromabnehmer am Signal El 6?", "answer": "Der Eisenbahninfrastrukturunternehmer darf das Vorbeileiten der Spitze eines Triebfahrzeugs mit gehobenem Stromabnehmer zulassen. Der Eisenbahnverkehrsunternehmer regelt, unter welchen Bedingungen und wie die Vorbeifahrt am Signal El 6 erfolgen darf.", "group": "El"}, {"difficulty": "schwer", "question": "Wie ist El 6 bei Dunkelheit zu erkennen?", "answer": "Das Signal ist rückstrahlend oder beleuchtet, wenn der Betrieb es erfordert. Die betreffenden Gleise sind in den örtlichen Zusätzen angegeben.", "group": "El"}, {"difficulty": "leicht", "question": "Fz 1 (Rangierlokomotivsignal) – Was bedeutet das Signal?", "answer": "Kennzeichnung einer Lokomotive im Rangierdienst.", "sig": ["fz1"], "look": "Tageszeichen: kein besonderes Signal.\nNachtzeichen: vorn und hinten ein weißes Licht in Höhe der Puffer.\nStattdessen kann auch Zg 1a geführt werden.", "group": "Fz"}, {"difficulty": "leicht", "question": "Fz 2 (Gelbe Fahne) – Was bedeutet das Signal?", "answer": "Kennzeichnung von Wagen, die während eines Stilllagers mit Personal besetzt sind.", "sig": ["fz2"], "look": "Tageszeichen: an jeder Langseite des Wagens eine gelbe Fahne oder gelbe Tafel.\nNachtzeichen: das Tageszeichen; außerdem der Wagen nach außen erkennbar im Inneren beleuchtet.", "group": "Fz"}, {"difficulty": "leicht", "question": "Zg 1 (Spitzensignal) – Was bedeutet das Signal?", "answer": "Kennzeichnung der Zugspitze.", "sig": ["zg1a", "zg1b"], "look": "Tageszeichen: kein besonderes Signal.\nNachtzeichen: Zg 1a (drei weiße Lichter in Form eines A) oder Zg 1b (zwei weiße Lichter in gleicher Höhe).", "group": "Zg"}, {"difficulty": "leicht", "question": "Zg 1a (Dreilicht-Spitzensignal) – Wo und wann wird es geführt?", "answer": "Vorn am ersten Fahrzeug, wenn dieses ein Triebfahrzeug oder Steuerwagen ist: drei weiße Lichter in Form eines A.", "sig": ["zg1a"], "group": "Zg"}, {"difficulty": "leicht", "question": "Zg 1b – Wo und wann wird es geführt?", "answer": "Vorn am ersten Fahrzeug, wenn dieses nicht ein Triebfahrzeug oder Steuerwagen ist: zwei weiße Lichter in gleicher Höhe.", "sig": ["zg1b"], "group": "Zg"}, {"difficulty": "leicht", "question": "Zg 2 (Schlusssignal) – Was bedeutet das Signal?", "answer": "Kennzeichnung des Zugschlusses.", "sig": ["zg2", "zg2s"], "look": "Am letzten Fahrzeug zwei rote Lichter\noder zwei rechteckige reflektierende Schilder mit weißen Dreiecken seitlich und je einem roten Dreieck oben und unten, die mit ihren Spitzen sich in der Mitte des Schildes berühren. Die roten Lichter dürfen blinken.", "group": "Zg"}, {"difficulty": "mittel", "question": "Wie sieht Fz 1 bei Nacht aus?", "answer": "Vorn und hinten ein weißes Licht, in Höhe der Puffer. Am Tag: kein besonderes Signal.", "sig": ["fz1"], "group": "Fz"}, {"difficulty": "mittel", "question": "Wie sieht Fz 2 aus?", "answer": "Am Tag: an jeder Langseite des Wagens eine gelbe Fahne oder gelbe Tafel. Bei Nacht zusätzlich: Wagen nach außen erkennbar im Inneren beleuchtet.", "sig": ["fz2"], "group": "Fz"}, {"difficulty": "mittel", "question": "Wie sieht Zg 1a aus?", "answer": "Drei weiße Lichter in Form eines A (zwei unten, eins oben).", "sig": ["zg1a"], "group": "Zg"}, {"difficulty": "mittel", "question": "Wie sieht Zg 1b aus?", "answer": "Zwei weiße Lichter in gleicher Höhe.", "sig": ["zg1b"], "group": "Zg"}, {"difficulty": "mittel", "question": "Wie sieht Zg 2 aus?", "answer": "Zwei rote Lichter am letzten Fahrzeug – oder zwei rechteckige reflektierende Schilder: weiß mit seitlichen weißen Dreiecken, rotes Dreieck oben und unten, Spitzen berühren sich in der Mitte.", "sig": ["zg2", "zg2s", "zg2sd"], "group": "Zg"}, {"difficulty": "schwer", "question": "Wofür sind die Signale an einzelnen Fahrzeugen (Fz) da?", "answer": "Sie kennzeichnen Rangierlokomotiven und Fahrzeuge, deren Besetzung besondere Vorsichtsmaßnahmen erfordert.", "group": "Fz"}, {"difficulty": "schwer", "question": "Wofür sind die Signale an Zügen (Zg) da?", "answer": "Sie kennzeichnen Züge und auf die freie Strecke übergehende Nebenfahrzeuge mit Kraftantrieb.", "group": "Zg"}, {"difficulty": "schwer", "question": "Wer führt Fz 1 außer Rangierlokomotiven?", "answer": "Auch Nebenfahrzeuge mit Kraftantrieb im Rangierdienst führen das Signal.", "sig": ["fz1"], "group": "Fz"}, {"difficulty": "schwer", "question": "Wann muss statt Fz 1 das Signal Zg 1a geführt werden?", "answer": "Wenn beim Rangieren Bahnübergänge ohne technische Sicherung oder ohne Sicherung durch Posten befahren werden. Zg 1a wird dann auch bei Tage geführt. Sonst kann Zg 1a freiwillig statt Fz 1 geführt werden.", "sig": ["zg1a"], "group": "Fz"}, {"difficulty": "schwer", "question": "Wann wird Fz 2 geführt, und wer bringt es an?", "answer": "Solange die Wagen sich nicht im Zuge befinden. Das Signal wird vom Personal der Wagen angebracht.", "sig": ["fz2"], "group": "Fz"}, {"difficulty": "schwer", "question": "Wer führt Zg 1b außer Wagen an der Zugspitze?", "answer": "Nebenfahrzeuge, an denen wegen ihrer niedrigen Bauart das obere Licht des Signals Zg 1a nicht angebracht werden kann, führen Zg 1b.", "sig": ["zg1b"], "group": "Zg"}, {"difficulty": "schwer", "question": "Was gilt für das Spitzensignal bei nachgeschobenen Zügen?", "answer": "Bei nachgeschobenen Zügen trägt auch das Schiebebetriebfahrzeug das Spitzensignal, sofern es nicht mit dem Zug gekuppelt ist.", "sig": ["zg1a"], "group": "Zg"}, {"difficulty": "schwer", "question": "Wann sind die Nachtzeichen des Spitzensignals (Zg 1) zu führen?", "answer": "Die Nachtzeichen sind auch bei Tage zu führen.", "sig": ["zg1a", "zg1b"], "group": "Zg"}, {"difficulty": "schwer", "question": "Dürfen die roten Lichter des Schlusssignals (Zg 2) blinken?", "answer": "Ja, die roten Lichter dürfen blinken.", "sig": ["zg2"], "group": "Zg"}, {"difficulty": "leicht", "question": "Wn 1 – Was bedeutet das Signal?", "answer": "Gerader Zweig.", "sig": ["wn1f", "wn1l"], "look": "Von der Weichenspitze oder vom Herzstück aus gesehen.\nFormsignal: ein auf der Schmalseite stehendes weißes Rechteck auf schwarzem Grund.\nLichtsignal: zwei übereinander stehende weiße Lichter.", "group": "Wn"}, {"difficulty": "leicht", "question": "Wn 2 – Was bedeutet das Signal?", "answer": "Gebogener Zweig.", "sig": ["wn2f", "wn2fr", "wn2l"], "look": "Von der Weichenspitze aus gesehen.\nFormsignal: ein weißer Pfeil oder Streifen auf schwarzem Grund zeigt entsprechend der Ablenkung schräg nach links oder rechts aufwärts.\nLichtsignal: zwei nebeneinander stehende weiße Lichter.", "group": "Wn"}, {"difficulty": "leicht", "question": "Wn 3 – Was bedeutet das Signal?", "answer": "Gerade von links nach rechts.", "sig": ["wn3f", "wn3l"], "look": "Formsignal: die Pfeile oder Streifen bilden eine von links nach rechts steigende Linie.\nLichtsignal: die Lichter bilden eine von links nach rechts steigende Linie.", "group": "Wn"}, {"difficulty": "leicht", "question": "Wn 4 – Was bedeutet das Signal?", "answer": "Gerade von rechts nach links.", "sig": ["wn4f", "wn4l"], "look": "Formsignal: die Pfeile oder Streifen bilden eine von rechts nach links steigende Linie.\nLichtsignal: die Lichter bilden eine von rechts nach links steigende Linie.", "group": "Wn"}, {"difficulty": "leicht", "question": "Wn 5 – Was bedeutet das Signal?", "answer": "Bogen von links nach links.", "sig": ["wn5f", "wn5l"], "look": "Formsignal: die Pfeile oder Streifen bilden einen nach links geöffneten rechten Winkel.\nLichtsignal: die Lichter bilden einen nach links geöffneten rechten Winkel.", "group": "Wn"}, {"difficulty": "leicht", "question": "Wn 6 – Was bedeutet das Signal?", "answer": "Bogen von rechts nach rechts.", "sig": ["wn6f", "wn6l"], "look": "Formsignal: die Pfeile oder Streifen bilden einen nach rechts geöffneten rechten Winkel.\nLichtsignal: die Lichter bilden einen nach rechts geöffneten rechten Winkel.", "group": "Wn"}, {"difficulty": "leicht", "question": "Wn 7 – Was bedeutet das Signal?", "answer": "Die Gleissperre ist abgelegt.", "sig": ["wn7"], "look": "Ein senkrechter, schwarzer Streifen in einer runden, weißen Scheibe auf schwarzem Grund.", "group": "Wn"}, {"difficulty": "leicht", "question": "Wn 2 vom Herzstück aus gesehen – Wie sieht es aus?", "answer": "Bei einfachen Weichen und Innenbogenweichen: eine runde weiße Scheibe auf schwarzem Grund.", "sig": ["wnHz"], "group": "Wn"}, {"difficulty": "leicht", "question": "Wn 2 vom Herzstück aus gesehen bei Außenbogenweichen – Wie sieht es aus?", "answer": "Eine nach links oder rechts geöffnete Sichel auf runder weißer Scheibe mit schwarzem Grund.", "sig": ["wnHzS", "wnHzSr"], "group": "Wn"}, {"difficulty": "mittel", "question": "Wie sieht Wn 1 aus?", "answer": "Formsignal: weißes Rechteck auf der Schmalseite, schwarzer Grund. Lichtsignal: zwei weiße Lichter übereinander.", "sig": ["wn1f", "wn1l"], "group": "Wn"}, {"difficulty": "mittel", "question": "Wie sieht Wn 2 aus?", "answer": "Formsignal: weißer Pfeil/Streifen schräg nach links oder rechts aufwärts. Lichtsignal: zwei weiße Lichter nebeneinander.", "sig": ["wn2f", "wn2fr", "wn2l"], "group": "Wn"}, {"difficulty": "mittel", "question": "Wie sieht Wn 3 aus?", "answer": "Von links nach rechts steigende Linie aus Pfeilen/Streifen bzw. Lichtern.", "sig": ["wn3f", "wn3l"], "group": "Wn"}, {"difficulty": "mittel", "question": "Wie sieht Wn 4 aus?", "answer": "Von rechts nach links steigende Linie aus Pfeilen/Streifen bzw. Lichtern.", "sig": ["wn4f", "wn4l"], "group": "Wn"}, {"difficulty": "mittel", "question": "Wie sieht Wn 5 aus?", "answer": "Nach links geöffneter rechter Winkel aus Pfeilen/Streifen bzw. Lichtern.", "sig": ["wn5f", "wn5l"], "group": "Wn"}, {"difficulty": "mittel", "question": "Wie sieht Wn 6 aus?", "answer": "Nach rechts geöffneter rechter Winkel aus Pfeilen/Streifen bzw. Lichtern.", "sig": ["wn6f", "wn6l"], "group": "Wn"}, {"difficulty": "mittel", "question": "Wie sieht Wn 7 aus?", "answer": "Senkrechter schwarzer Streifen in runder weißer Scheibe auf schwarzem Grund.", "sig": ["wn7"], "group": "Wn"}, {"difficulty": "schwer", "question": "Wofür sind Weichensignale (Wn) da?", "answer": "Sie zeigen an, für welchen Fahrweg die Weiche gestellt ist.", "group": "Wn"}, {"difficulty": "schwer", "question": "Wie sind Weichensignale bei Dunkelheit zu erkennen?", "answer": "Sie sind entweder rückstrahlend oder, wenn der Betrieb es erfordert, bei Dunkelheit beleuchtet.", "group": "Wn"}, {"difficulty": "schwer", "question": "Was zeigen Lichtsignale der Weichensignale während des Umstellvorgangs oder bei Störung der Weiche?", "answer": "Mindestens ein weißes Licht blinkt. Bei den Eisenbahnen des Bundes blinken zwei weiße Lichter.", "group": "Wn"}, {"difficulty": "schwer", "question": "Wie werden Weichensignale an Rückfallweichen dargestellt?", "answer": "Die weißen Symbole der Signale Wn 1 und Wn 2 werden auf orangefarbenem Grund dargestellt.", "sig": ["wn1l", "wn2l"], "group": "Wn"}, {"difficulty": "schwer", "question": "Welchen Zweig zeigt Wn 1 bzw. Wn 2 bei Innenbogenweichen an?", "answer": "Wn 1: den schwächer gebogenen Zweig. Wn 2: den stärker gebogenen Zweig.", "sig": ["wn1f", "wn2f"], "group": "Wn"}, {"difficulty": "schwer", "question": "Welches Signal gilt bei Außenbogenweichen?", "answer": "In beiden Stellungen wird Wn 2 verwendet; der Pfeil zeigt je nach Richtung des abzweigenden Gleises nach links oder rechts schräg aufwärts.", "sig": ["wn2f", "wn2fr"], "group": "Wn"}, {"difficulty": "schwer", "question": "Wie sieht das Formsignal vom Herzstück aus gesehen aus?", "answer": "Bei einfachen Weichen und Innenbogenweichen: runde weiße Scheibe auf schwarzem Grund. Bei Außenbogenweichen: nach links oder rechts geöffnete Sichel auf runder weißer Scheibe.", "sig": ["wnHz", "wnHzS"], "group": "Wn"}, {"difficulty": "schwer", "question": "Wann ist die Sichel (Außenbogenweiche, vom Herzstück aus) nach links, wann nach rechts geöffnet?", "answer": "Bei Fahrten aus dem linksseitigen Gleis nach links, bei Fahrten aus dem rechtsseitigen Gleis nach rechts.", "sig": ["wnHzS", "wnHzSr"], "group": "Wn"}, {"difficulty": "schwer", "question": "Was bedeuten „links“ und „rechts“ in der Signalbedeutung der Signale für doppelte Kreuzungsweichen?", "answer": "Die Weiche steht für die Fahrt in den oder aus dem entsprechenden Zweig.", "group": "Wn"}, {"difficulty": "schwer", "question": "Wie zeigen Signale bei doppelten Kreuzungsweichen den Fahrweg?", "answer": "Die Richtung der Pfeile oder Streifen kennzeichnet den Fahrweg: der untere Pfeil/Streifen gibt die Fahrt in die Weiche an, der obere die Fahrt aus der Weiche.", "sig": ["wn3f", "wn4f"], "group": "Wn"}, {"difficulty": "schwer", "question": "Wird durch Wn 7 die Zustimmung des Weichenwärters erteilt?", "answer": "Nein, durch Wn 7 wird keine Zustimmung des Weichenwärters erteilt.", "sig": ["wn7"], "group": "Wn"}, {"difficulty": "schwer", "question": "Was zeigt Wn 7 nach rückwärts bei Tage?", "answer": "Eine kleine weiße, runde Scheibe auf schwarzem Grund.", "sig": ["wn7"], "group": "Wn"}, {"difficulty": "schwer", "question": "Welches Signal darf bis auf weiteres anstelle von Wn 7 verwendet werden?", "answer": "Das Signal Sh 1 (Formsignal).", "sig": ["wn7"], "group": "Wn"}, {"difficulty": "leicht", "question": "Ra 10 (Rangierhalttafel) – Was bedeutet das Signal?", "answer": "Über die Tafel hinaus darf nicht rangiert werden.", "sig": ["ra10", "ra10b"], "look": "Eine oben halbkreisförmig abgerundete weiße Tafel mit schwarzer Aufschrift „Halt für Rangierfahrten“. Die weiße Tafel kann auch ohne Aufschrift sein.", "group": "Ra"}, {"difficulty": "leicht", "question": "Ra 11 / Ra 11a / Ra 11b (Wartezeichen) – Was bedeutet das Signal?", "answer": "Auftrag des Wärters zur Rangierfahrt abwarten.", "sig": ["ra11", "ra11b"], "look": "Ra 11 (DS 301) und Ra 11a (DV 301): ein gelbes W mit schwarzem Rand.\nRa 11b (DV 301): ein weißes W mit schwarzem Rand.", "group": "Ra"}, {"difficulty": "leicht", "question": "Ra 12 / So 12 (Grenzzeichen) – Was bedeutet das Signal?", "answer": "Grenze, bis zu der bei zusammenlaufenden Gleisen das Gleis besetzt werden darf.", "sig": ["ra12"], "look": "Ein rot-weißes Zeichen.", "group": "Ra"}, {"difficulty": "leicht", "question": "Ra 13 (Isolierzeichen) – Was bedeutet das Signal?", "answer": "Kennzeichnung der Grenze der Gleisisolierung.", "sig": ["ra13"], "look": "Auf weißem Grund ein blauer Pfeil.", "group": "Ra"}, {"difficulty": "mittel", "question": "Wie sieht Ra 10 aus?", "answer": "Oben halbkreisförmig abgerundete weiße Tafel mit schwarzer Aufschrift „Halt für Rangierfahrten“ (kann auch ohne Aufschrift sein).", "sig": ["ra10", "ra10b"], "group": "Ra"}, {"difficulty": "mittel", "question": "Wie sieht Ra 11 aus, und wie Ra 11b?", "answer": "Ra 11 / Ra 11a: gelbes W mit schwarzem Rand. Ra 11b: weißes W mit schwarzem Rand.", "sig": ["ra11", "ra11b"], "group": "Ra"}, {"difficulty": "mittel", "question": "Wie sieht Ra 12 / So 12 aus?", "answer": "Ein rot-weißes Zeichen.", "sig": ["ra12"], "group": "Ra"}, {"difficulty": "mittel", "question": "Wie sieht Ra 13 aus?", "answer": "Auf weißem Grund ein blauer Pfeil.", "sig": ["ra13"], "group": "Ra"}, {"difficulty": "schwer", "question": "Wo steht Ra 10?", "answer": "Das Signal steht in der Regel links vom Gleis.", "sig": ["ra10"], "group": "Ra"}, {"difficulty": "schwer", "question": "Wo steht Ra 12 (So 12)?", "answer": "Im Winkel zwischen beiden Gleisen: entweder ein Zeichen in der Mitte zwischen beiden Gleisen oder je ein Zeichen neben der inneren Schiene jedes Gleises.", "sig": ["ra12"], "group": "Ra"}, {"difficulty": "schwer", "question": "Was gibt das Isolierzeichen (Ra 13) an?", "answer": "Wie weit ein Gleis freizuhalten ist, damit das Umstellen von Weichen und Signalen nicht verhindert wird.", "sig": ["ra13"], "group": "Ra"}, {"difficulty": "schwer", "question": "Wo steht Ra 13, und worauf weist der Pfeil?", "answer": "Rechts oder links vom Gleis. Der blaue Pfeil weist auf das zugehörige Gleis. Das Signal kann auch vor Zugeinwirkungsstellen von Automatik-Hilfseinschalttasten der BÜ angeordnet sein.", "sig": ["ra13"], "group": "Ra"}, {"difficulty": "schwer", "question": "Wer muss vor der Vorbeifahrt am Wartezeichen (Ra 11) zugestimmt haben?", "answer": "Bevor mit der Spitze einer Rangierfahrt am Wartezeichen vorbeigefahren werden darf, muss der Weichenwärter eine Zustimmung gegeben haben.", "sig": ["ra11"], "group": "Ra"}, {"difficulty": "schwer", "question": "Wie wird die Zustimmung zur Vorbeifahrt an Ra 11, Ra 11a und Ra 11b gegeben?", "answer": "a) Ra 11 (DS 301): durch Lichtsignal Sh 1 (DS 301).\nb) Ra 11 (DS 301) und Ra 11b (DV 301): mündlich oder durch Hochhalten eines Armes oder einer weiß leuchtenden Handleuchte.\nc) Ra 11a (DV 301): durch Signal Ra 12 (DV 301).", "sig": ["ra11", "ra11b"], "group": "Ra"}, {"difficulty": "schwer", "question": "Wann wird Ra 11a angewandt, wann Ra 11b?", "answer": "Ra 11a (DV 301) nur in Verbindung mit Ra 12 (DV 301). Ra 11b (DV 301) alleinstehend sowie an Drehscheiben und Schiebebühnen, stets ohne Ra 12 (DV 301).", "sig": ["ra11", "ra11b"], "group": "Ra"}, {"difficulty": "schwer", "question": "Was zeigt Ra 11b an Drehscheiben und Schiebebühnen an?", "answer": "Dass diese von Fahrzeugen erst befahren oder verlassen werden dürfen, wenn der Wärter hierfür die Zustimmung gibt.", "sig": ["ra11b"], "group": "Ra"}, {"difficulty": "schwer", "question": "Ist das Wartezeichen (Ra 11) bei Dunkelheit beleuchtet?", "answer": "Das Signal kann bei Dunkelheit beleuchtet sein.", "sig": ["ra11"], "group": "Ra"}, {"difficulty": "leicht", "question": "Zs 1 (Ersatzsignal) – Was bedeutet das Signal?", "answer": "Am Signal Hp 0 oder am gestörten Lichthauptsignal ohne schriftlichen Befehl vorbeifahren.", "sig": ["zs1", "zs1b"], "look": "Drei weiße Lichter in Form eines A\noder ein weißes Blinklicht.", "group": "Zs"}, {"difficulty": "leicht", "question": "Zs 2 (Richtungsanzeiger) – Was bedeutet das Signal?", "answer": "Die Fahrstraße führt in die angezeigte Richtung.", "sig": ["zs2"], "look": "Ein weißleuchtender Buchstabe.", "group": "Zs"}, {"difficulty": "leicht", "question": "Zs 2v (Richtungsvoranzeiger) – Was bedeutet das Signal?", "answer": "Richtungsanzeiger (Zs 2) erwarten.", "sig": ["zs2v"], "look": "Ein gelbleuchtender Buchstabe.", "group": "Zs"}, {"difficulty": "leicht", "question": "Zs 3 (Geschwindigkeitsanzeiger) – Was bedeutet das Signal?", "answer": "Die durch die Kennziffer angezeigte Geschwindigkeit darf vom Signal ab im anschließenden Weichenbereich nicht überschritten werden.", "sig": ["zs3f", "zs3fu", "zs3l"], "look": "Formsignal: eine weiße Kennziffer auf dreieckiger schwarzer Tafel mit weißem Rand. Die Tafel steht in der Regel auf der Spitze; bei beschränktem Raum kann die Spitze nach oben zeigen.\nLichtsignal: eine weiß leuchtende Kennziffer.", "group": "Zs"}, {"difficulty": "leicht", "question": "Zs 3v (Geschwindigkeitsvoranzeiger) – Was bedeutet das Signal?", "answer": "Geschwindigkeitsanzeiger (Zs 3) erwarten.", "sig": ["zs3vf", "zs3vl"], "look": "Lichtsignal: eine gelbleuchtende Kennziffer.\nFormsignal: eine gelbe Kennziffer auf dreieckiger schwarzer Tafel mit gelbem Rand.", "group": "Zs"}, {"difficulty": "leicht", "question": "Zs 6 (Gegengleisanzeiger) – Was bedeutet das Signal?", "answer": "Der Fahrweg führt in das Streckengleis entgegen der gewöhnlichen Fahrtrichtung.", "sig": ["zs6l", "zs6f"], "look": "Lichtsignal: ein weiß leuchtender schräger Lichtstreifen, dessen Enden in der Regel senkrecht nach oben und unten abgebogen sind.\nFormsignal: eine rechteckige schwarze Scheibe mit weißem Rand und einem weißen von rechts nach links steigenden Streifen, dessen Enden senkrecht abgewinkelt sind. Das Formsignal ist rückstrahlend.\nDV 301: Die Enden können bis auf weiteres nicht abgewinkelt sein.", "group": "Zs"}, {"difficulty": "leicht", "question": "Zs 7 (Vorsichtssignal) – Was bedeutet das Signal?", "answer": "Am Signal Hp 0 oder am gestörten Lichthauptsignal ohne schriftlichen Befehl vorbeifahren! Weiterfahrt auf Sicht.", "sig": ["zs7"], "look": "Drei gelbe Lichter in Form eines V.", "group": "Zs"}, {"difficulty": "leicht", "question": "Zs 8 (Gegengleisfahrt-Ersatzsignal) – Was bedeutet das Signal?", "answer": "Am Halt zeigenden oder gestörten Hauptsignal vorbeifahren, der Fahrweg führt in das Streckengleis entgegen der gewöhnlichen Fahrtrichtung.", "sig": ["zs8", "zs8b"], "look": "Drei blinkende weiße Lichter in Form eines A\noder ein weißblinkender Lichtstreifen von rechts nach links steigend.", "group": "Zs"}, {"difficulty": "leicht", "question": "Zs 10 (Endesignal, DS 301) – Was bedeutet das Signal?", "answer": "Ende der Geschwindigkeitsbeschränkung.", "sig": ["zs10f", "zs10l"], "look": "Formsignal: ein weißer Pfeil mit der Spitze nach oben auf pfeilförmiger, schwarzer Tafel.\nLichtsignal: ein weißleuchtender Pfeil mit der Spitze nach oben.", "group": "Zs"}, {"difficulty": "leicht", "question": "Zs 12 (M-Tafel) – Was bedeutet das Signal?", "answer": "Am Halt zeigenden oder gestörten Hauptsignal auf mündlichen oder fernmündlichen Auftrag vorbeifahren.", "sig": ["zs12"], "look": "Eine weiße Tafel mit rotem Rand und rotem „M“ in Schreibschrift.", "group": "Zs"}, {"difficulty": "leicht", "question": "Zs 13 (Stumpfgleis- und Frühhaltanzeiger) – Was bedeutet das Signal?", "answer": "Fahrt in ein Stumpfgleis oder in ein Gleis mit verkürztem Einfahrweg.", "sig": ["zs13f", "zs13l"], "look": "Formsignal: ein um 90° nach links umgelegtes gelbes rückstrahlendes „T“ auf einer rechteckigen schwarzen Tafel.\nLichtsignal: ein um 90° nach links umgelegtes gelbleuchtendes „T“.", "group": "Zs"}, {"difficulty": "mittel", "question": "Wie sieht Zs 1 aus?", "answer": "Drei weiße Lichter in Form eines A\noder ein weißes Blinklicht.", "sig": ["zs1", "zs1b"], "group": "Zs"}, {"difficulty": "mittel", "question": "Wie sieht Zs 2 aus?", "answer": "Ein weißleuchtender Buchstabe.", "sig": ["zs2"], "group": "Zs"}, {"difficulty": "mittel", "question": "Wie sieht Zs 2v aus?", "answer": "Ein gelbleuchtender Buchstabe.", "sig": ["zs2v"], "group": "Zs"}, {"difficulty": "mittel", "question": "Wie sieht Zs 3 aus?", "answer": "Formsignal: eine weiße Kennziffer auf dreieckiger schwarzer Tafel mit weißem Rand. Die Tafel steht in der Regel auf der Spitze; bei beschränktem Raum kann die Spitze nach oben zeigen.\nLichtsignal: eine weiß leuchtende Kennziffer.", "sig": ["zs3f", "zs3fu", "zs3l"], "group": "Zs"}, {"difficulty": "mittel", "question": "Wie sieht Zs 3v aus?", "answer": "Lichtsignal: eine gelbleuchtende Kennziffer.\nFormsignal: eine gelbe Kennziffer auf dreieckiger schwarzer Tafel mit gelbem Rand.", "sig": ["zs3vf", "zs3vl"], "group": "Zs"}, {"difficulty": "mittel", "question": "Wie sieht Zs 6 aus?", "answer": "Lichtsignal: ein weiß leuchtender schräger Lichtstreifen, dessen Enden in der Regel senkrecht nach oben und unten abgebogen sind.\nFormsignal: eine rechteckige schwarze Scheibe mit weißem Rand und einem weißen von rechts nach links steigenden Streifen, dessen Enden senkrecht abgewinkelt sind. Das Formsignal ist rückstrahlend.\nDV 301: Die Enden können bis auf weiteres nicht abgewinkelt sein.", "sig": ["zs6l", "zs6f"], "group": "Zs"}, {"difficulty": "mittel", "question": "Wie sieht Zs 7 aus?", "answer": "Drei gelbe Lichter in Form eines V.", "sig": ["zs7"], "group": "Zs"}, {"difficulty": "mittel", "question": "Wie sieht Zs 8 aus?", "answer": "Drei blinkende weiße Lichter in Form eines A\noder ein weißblinkender Lichtstreifen von rechts nach links steigend.", "sig": ["zs8", "zs8b"], "group": "Zs"}, {"difficulty": "mittel", "question": "Wie sieht Zs 10 aus?", "answer": "Formsignal: ein weißer Pfeil mit der Spitze nach oben auf pfeilförmiger, schwarzer Tafel.\nLichtsignal: ein weißleuchtender Pfeil mit der Spitze nach oben.", "sig": ["zs10f", "zs10l"], "group": "Zs"}, {"difficulty": "mittel", "question": "Wie sieht Zs 12 aus?", "answer": "Eine weiße Tafel mit rotem Rand und rotem „M“ in Schreibschrift.", "sig": ["zs12"], "group": "Zs"}, {"difficulty": "mittel", "question": "Wie sieht Zs 13 aus?", "answer": "Formsignal: ein um 90° nach links umgelegtes gelbes rückstrahlendes „T“ auf einer rechteckigen schwarzen Tafel.\nLichtsignal: ein um 90° nach links umgelegtes gelbleuchtendes „T“.", "sig": ["zs13f", "zs13l"], "group": "Zs"}, {"difficulty": "schwer", "question": "Wofür gelten Zusatzsignale, und was gilt für Zs 103?", "answer": "Zusatzsignale gelten für Zugfahrten. Das Signal Zs 103 (DV 301) gilt nur für Rangierfahrten.", "group": "Zs"}, {"difficulty": "schwer", "question": "Wo werden ortsfeste Zusatzsignale in der Regel gezeigt, und welche können alleinstehend gezeigt werden?", "answer": "Ortsfeste Zusatzsignale werden in der Regel an Haupt- oder Vorsignalen gezeigt. Die Signale Zs 2, Zs 2v, Zs 3, Zs 3v, Zs 6 und Zs 10 (DS 301) können alleinstehend gezeigt werden.", "group": "Zs"}, {"difficulty": "schwer", "question": "Gilt das Ersatzsignal Zs 1 auch, wenn es erlischt?", "answer": "Ja, das Ersatzsignal gilt auch, wenn es erlischt, bevor die Spitze des Zuges am Signal vorbeigefahren ist.", "sig": ["zs1"], "group": "Zs"}, {"difficulty": "schwer", "question": "Wofür gibt der Richtungsanzeiger (Zs 2) einen Kennbuchstaben an?", "answer": "Für welche Fahrtrichtung oder für welches Streckengleis mehrerer nebeneinander verlaufender Strecken das Hauptsignal auf Fahrt steht. Er wird auch angewandt, wenn dem Triebfahrzeugführer bei größeren Bahnhöfen die Einfahrt in einen bestimmten Bahnhofsteil (z. B. Rangier- oder Personenbahnhof) angezeigt werden soll.", "sig": ["zs2"], "group": "Zs"}, {"difficulty": "schwer", "question": "Wo sind die verwendeten Buchstaben des Zs 2 enthalten?", "answer": "Der Infrastrukturunternehmer gibt die verwendeten Kennbuchstaben bekannt. Sie sind im Fahrplan enthalten; außerdem können sie in örtlichen Zusätzen enthalten sein.", "sig": ["zs2"], "group": "Zs"}, {"difficulty": "schwer", "question": "Welche Besonderheit gilt für den Richtungsvoranzeiger (Zs 2v) im Geltungsbereich der DV 301?", "answer": "Im Geltungsbereich der DV 301 darf der Richtungsvoranzeiger bis auf weiteres auch weißleuchtend sein.", "sig": ["zs2v"], "group": "Zs"}, {"difficulty": "schwer", "question": "Was bedeutet die gezeigte Kennziffer bei Zs 3 und Zs 3v?", "answer": "Der 10fache Wert der Kennziffer in km/h ist als Fahrgeschwindigkeit zugelassen (z. B. 6 = 60 km/h).", "sig": ["zs3f", "zs3vf"], "group": "Zs"}, {"difficulty": "schwer", "question": "Wann wird Zs 3 auch an Blocksignalen selbsttätiger Blockstellen (Sbk) angewendet?", "answer": "Wenn das nächste Signal im verkürzten Bremswegabstand folgt. In diesem Fall gilt die angezeigte Geschwindigkeit bei Vorbeifahrt der Spitze des Zuges am Signal.", "sig": ["zs3l"], "group": "Zs"}, {"difficulty": "schwer", "question": "Was können die Kennziffern 3, 1 und 2 bei Zs 3 anzeigen?", "answer": "Die Kennziffer 3 kann anzeigen, dass in Stumpfgleise eingefahren wird oder dass ein ausreichender Durchrutschweg fehlt. Die Kennziffern 1 und 2 können anzeigen, dass besonders früh zu halten oder in ein besetztes Gleis einzufahren ist.", "sig": ["zs3l"], "group": "Zs"}, {"difficulty": "schwer", "question": "Was gilt, wenn innerhalb des anschließenden Weichenbereichs durch ein Signal Zs 3 eine andere Geschwindigkeit angezeigt wird?", "answer": "Diese Geschwindigkeit gilt bis zum Ende des Weichenbereichs. Eine durch Hauptsignal oder Signal Zs 3 vorgeschriebene Geschwindigkeitsbeschränkung kann durch ein alleinstehendes Signal Zs 3 bereits vor dem Ende des anschließenden Weichenbereichs geändert werden.", "sig": ["zs3f"], "group": "Zs"}, {"difficulty": "schwer", "question": "Wie ist das Formsignal Zs 3 zu erkennen, und wie steht es an Lichthauptsignalen?", "answer": "Das Formsignal ist rückstrahlend oder bei Dunkelheit beleuchtet; es kann bis auf weiteres nicht rückstrahlend oder beleuchtet sein. Das Formsignal an Lichthauptsignalen zeigt mit der Spitze nach oben.", "sig": ["zs3fu"], "group": "Zs"}, {"difficulty": "schwer", "question": "Ist das Formsignal Zs 3v rückstrahlend?", "answer": "Ja, das Formsignal ist rückstrahlend.", "sig": ["zs3vf"], "group": "Zs"}, {"difficulty": "schwer", "question": "Was zeigt der Gegengleisanzeiger (Zs 6) an, und bis wohin gilt der Auftrag?", "answer": "Dass auf zweigleisiger Strecke das Gleis entgegen der gewöhnlichen Fahrtrichtung befahren werden darf. Der Auftrag gilt bis zum nächsten Bahnhof; liegt davor eine Abzweig- oder Überleitstelle, gilt er bis dahin.", "sig": ["zs6l"], "group": "Zs"}, {"difficulty": "schwer", "question": "Wie wird die vorübergehende Anwendung des Formsignals Zs 6 bekannt gegeben?", "answer": "Bei den Eisenbahnen des Bundes durch das Infrastrukturunternehmen in der La. Bei NE-Bahnen wird in einer betrieblichen Anweisung des Betriebsleiters darauf hingewiesen.", "sig": ["zs6f"], "group": "Zs"}, {"difficulty": "schwer", "question": "Wie lange gilt der Auftrag „Weiterfahrt auf Sicht“ bei Zs 7?", "answer": "Bis zum nächsten Hauptsignal. Das Signal gilt weiter, auch wenn es erlischt, bevor die Spitze des Zuges daran vorbeigefahren ist.", "sig": ["zs7"], "group": "Zs"}, {"difficulty": "schwer", "question": "Was gilt für das Verhalten nach der Vorbeifahrt an Zs 7 bei den Gleichstrom-S-Bahnen Berlin und Hamburg?", "answer": "Es sind die örtlichen Zusätze zu beachten.", "sig": ["zs7"], "group": "Zs"}, {"difficulty": "schwer", "question": "Wofür gilt das Signal Zs 10, und was zeigt es an?", "answer": "Es gilt nur für Zugfahrten, die durch Fahrtstellung eines Hauptsignals zugelassen worden sind. Es zeigt an, dass eine mit Signal Hp 2 oder mit Signal Zs 3 vorgeschriebene Geschwindigkeitsbeschränkung bereits vor dem Ende des anschließenden Weichenbereichs aufgehoben ist.", "sig": ["zs10f"], "group": "Zs"}, {"difficulty": "schwer", "question": "Ist das Formsignal Zs 10 rückstrahlend, und können mehrere Zs 10 aufgestellt sein?", "answer": "Das Formsignal ist rückstrahlend. Innerhalb eines anschließenden Weichenbereichs können mehrere Signale Zs 10 für verschiedene Fahrwege aufgestellt sein.", "sig": ["zs10f"], "group": "Zs"}, {"difficulty": "schwer", "question": "Wann dürfen Züge am Halt zeigenden oder gestörten Hauptsignal vorbeifahren (Zs 12)?", "answer": "Nach dem Halten auf mündlichen oder fernmündlichen Auftrag des Fahrdienstleiters. Der Fahrdienstleiter darf zur Übermittlung seines Auftrags eine örtliche Aufsicht beauftragen.", "sig": ["zs12"], "group": "Zs"}, {"difficulty": "leicht", "group": "Sh", "question": "Sh 0 – Was bedeutet das Signal?", "answer": "Halt! Fahrverbot.", "sig": ["sh0", "sh0b"], "look": "Ein waagerechter schwarzer Streifen in runder weißer Scheibe auf schwarzem Grund."}, {"difficulty": "leicht", "group": "Sh", "question": "Sh 1 / Ra 12 (Rangierfahrtsignal, DV 301) – Was bedeutet das Signal?", "answer": "Sh 1: Fahrverbot aufgehoben. Ra 12 (DV 301): Rangierfahrt erlaubt.", "sig": ["sh1f", "sh1l"], "look": "Formsignal Sh 1: ein nach rechts steigender schwarzer Streifen auf runder weißer Scheibe.\nLichtsignal Sh 1 (DS 301) / Ra 12 (DV 301): zwei weiße Lichter nach rechts steigend."}, {"difficulty": "leicht", "group": "Sh", "question": "Sh 2 – Was bedeutet das Signal?", "answer": "Schutzhalt.", "sig": ["sh2", "sh2n"], "look": "Tageszeichen: eine rechteckige rote Scheibe mit weißem Rand.\nNachtzeichen: ein rotes Licht am Tageszeichen oder am Ausleger des Wasserkrans."}, {"difficulty": "leicht", "group": "Sh", "question": "Sh 3 (Kreissignal) – Was bedeutet das Signal?", "answer": "Sofort halten.", "sig": ["sh3", "sh3n"], "look": "Tageszeichen: eine rot-weiße Signalfahne, irgendein Gegenstand oder der Arm wird im Kreis geschwungen.\nNachtzeichen: eine Laterne, möglichst rot abgeblendet, oder ein leuchtender Gegenstand wird im Kreis geschwungen."}, {"difficulty": "leicht", "group": "Sh", "question": "Sh 5 (Horn- und Pfeifsignal) – Was bedeutet das Signal?", "answer": "Sofort halten.", "sig": ["sh5"], "look": "Mehrmals nacheinander drei kurze Töne."}, {"difficulty": "mittel", "group": "Sh", "question": "Wie sieht Sh 0 aus?", "answer": "Ein waagerechter schwarzer Streifen in runder weißer Scheibe auf schwarzem Grund.", "sig": ["sh0", "sh0b"]}, {"difficulty": "mittel", "group": "Sh", "question": "Wie sieht Sh 1 / Ra 12 aus?", "answer": "Formsignal Sh 1: ein nach rechts steigender schwarzer Streifen auf runder weißer Scheibe.\nLichtsignal Sh 1 (DS 301) / Ra 12 (DV 301): zwei weiße Lichter nach rechts steigend.", "sig": ["sh1f", "sh1l"]}, {"difficulty": "mittel", "group": "Sh", "question": "Wie sieht Sh 2 aus?", "answer": "Tageszeichen: eine rechteckige rote Scheibe mit weißem Rand.\nNachtzeichen: ein rotes Licht am Tageszeichen oder am Ausleger des Wasserkrans.", "sig": ["sh2", "sh2n"]}, {"difficulty": "mittel", "group": "Sh", "question": "Wie sieht Sh 3 aus?", "answer": "Tageszeichen: eine rot-weiße Signalfahne, irgendein Gegenstand oder der Arm wird im Kreis geschwungen.\nNachtzeichen: eine Laterne, möglichst rot abgeblendet, oder ein leuchtender Gegenstand wird im Kreis geschwungen.", "sig": ["sh3", "sh3n"]}, {"difficulty": "mittel", "group": "Sh", "question": "Wie ist Sh 5 zu hören?", "answer": "Mehrmals nacheinander drei kurze Töne.", "sig": ["sh5"]}, {"difficulty": "schwer", "group": "Sh", "question": "Wozu dienen Schutzsignale (Sh), und für wen gelten sie?", "answer": "Sie dienen dazu, ein Gleis abzuriegeln, den Auftrag zum Halten zu erteilen oder die Aufhebung eines Fahrverbots anzuzeigen. Sie gelten für Zug- und Rangierfahrten."}, {"difficulty": "schwer", "group": "Sh", "question": "Wo werden die Signale Sh 0 und Sh 1 verwendet?", "answer": "Am Sperrsignal, Gleissperrensignal (Formsignal) und Abschlusssignal von Stumpfgleisen.", "sig": ["sh0", "sh1f"]}, {"difficulty": "schwer", "group": "Sh", "question": "Womit kann das Formsignal verbunden sein?", "answer": "Das Formsignal kann mit einem Wartezeichen (Signal Ra 11) verbunden sein.", "sig": ["sh1f"]}, {"difficulty": "schwer", "group": "Sh", "question": "Wo dürfen die Schutzsignale abweichend links aufgestellt sein?", "answer": "Bei Gleiswaagen, Schiebebühnen und Drehscheiben (abweichend von Richtlinie 301.0002 Abschnitt 2 Absatz 3)."}, {"difficulty": "schwer", "group": "Sh", "question": "Wann sind Sh 0 und Formsignale Sh 1 bei Dunkelheit beleuchtet?", "answer": "Sh 0 an Gleisabschlüssen, die Stumpfgleiseinfahrten begrenzen, sind bei Dunkelheit beleuchtet. Übrige Sh 0 und Formsignale Sh 1 sind rückstrahlend oder beleuchtet, wenn der Betrieb es erfordert.", "sig": ["sh0"]}, {"difficulty": "schwer", "group": "Sh", "question": "Was zeigt Sh 0 bei Gleiswaagen, Drehscheiben und am Gleissperrensignal an?", "answer": "Bei Gleiswaagen und Drehscheiben, dass sie nicht befahren werden dürfen. Das Gleissperrensignal zeigt an, dass die Gleissperre aufgelegt ist.", "sig": ["sh0"]}, {"difficulty": "schwer", "group": "Sh", "question": "Was zeigt Sh 0 von hinten?", "answer": "Wo der Eisenbahninfrastrukturunternehmer bestimmt, dass die Stellung auch von hinten erkennbar sein soll: bei Tage zwei weiße runde Scheiben auf schwarzem Grund waagerecht nebeneinander; bei Dunkelheit rückstrahlend oder beleuchtet.", "sig": ["sh0b"]}, {"difficulty": "schwer", "group": "Sh", "question": "Was zeigt Sh 1 in Verbindung mit Hp 0 an?", "answer": "Dass das Haltegebot für Rangierfahrten aufgehoben ist.", "sig": ["sh1f"]}, {"difficulty": "schwer", "group": "Sh", "question": "Wird durch Sh 1 am Gleissperrensignal die Zustimmung des Weichenwärters erteilt?", "answer": "Nein. Das Signal Sh 1 am Gleissperrensignal zeigt nur an, dass die Gleissperre abgelegt ist.", "sig": ["sh1f"]}, {"difficulty": "schwer", "group": "Sh", "question": "Für welche Rangierfahrt gilt die Zustimmung, wenn mehrere vor dem Signal halten oder sich ihm nähern?", "answer": "Nur für die erste Rangierfahrt.", "sig": ["sh1l"]}, {"difficulty": "schwer", "group": "Sh", "question": "Was ist zu tun, wenn Sh 1 (Lichtsignal) bzw. Ra 12 erlischt, bevor die Spitze der Rangierfahrt vorbeigefahren ist?", "answer": "Das erneute Aufleuchten des Signals ist abzuwarten.", "sig": ["sh1l"]}, {"difficulty": "schwer", "group": "Sh", "question": "Was gilt, wenn das Formsignal Sh 1 mit einem Wartezeichen verbunden ist?", "answer": "Es ist stets eine besondere Zustimmung des Weichenwärters zur Vorbeifahrt abzuwarten.", "sig": ["sh1f"]}, {"difficulty": "schwer", "group": "Sh", "question": "Was zeigt das Formsignal Sh 1 von hinten?", "answer": "Wo der Eisenbahninfrastrukturunternehmer bestimmt, dass es auch von hinten erkennbar sein soll: bei Tage eine weiße runde Scheibe auf schwarzem Grund; bei Dunkelheit rückstrahlend oder beleuchtet.", "sig": ["sh1b"]}, {"difficulty": "schwer", "group": "Sh", "question": "Als was wird Sh 2 verwendet?", "answer": "Als Wärterhaltscheibe und als Abschlusssignal eines Stumpfgleises.", "sig": ["sh2"]}, {"difficulty": "schwer", "group": "Sh", "question": "Wo wird die Wärterhaltscheibe aufgestellt?", "answer": "Sie ist nicht ortsfest. Ist die Regelaufstellung nicht möglich, ist sie im Gleis aufgestellt. Auf freier Strecke in mindestens 50 m Sicherheitsabstand vor der zu schützenden Stelle.", "sig": ["sh2"]}, {"difficulty": "schwer", "group": "Sh", "question": "Wofür wird die Wärterhaltscheibe verwendet?", "answer": "a) zur Kennzeichnung einer Gleisstelle, die vorübergehend nicht befahren werden darf, b) zur Kennzeichnung einer Stelle, an der Züge ausnahmsweise anhalten sollen.", "sig": ["sh2"]}, {"difficulty": "schwer", "group": "Sh", "question": "Wo steht die Wärterhaltscheibe bei Abriegelung eines Gleises im Tunnel?", "answer": "Außerhalb des Tunnels. Ausnahmen für lange Tunnel ordnet bei den Eisenbahnen des Bundes der Eisenbahninfrastrukturunternehmer an, bei den NE der Betriebsleiter.", "sig": ["sh2"]}, {"difficulty": "schwer", "group": "Sh", "question": "Wie wird der Haltauftrag der Wärterhaltscheibe aufgehoben?", "answer": "Durch Entfernen oder Wegdrehen bzw. Wegklappen des Signals, soweit der Auftrag zur Vorbeifahrt nicht durch Befehl erteilt wird.", "sig": ["sh2"]}, {"difficulty": "schwer", "group": "Sh", "question": "Was wird am Abschlusssignal des Einfahrstumpfgleises bei ausreichender Außenbeleuchtung gezeigt?", "answer": "Bei ausreichender Außenbeleuchtung oder bei einfachen Verhältnissen nur das Tageszeichen. Das Abschlusssignal übriger Stumpfgleise ist rückstrahlend oder beleuchtet, wenn der Betrieb es erfordert.", "sig": ["sh2"]}, {"difficulty": "schwer", "group": "Sh", "question": "Wann wird das Kreissignal (Sh 3) gegeben?", "answer": "Wenn ein Zug oder eine Rangierfahrt sofort zum Halten gebracht werden muss. Ist es zweifelhaft, ob das Signal wahrgenommen wird, ist auch das Horn- und Pfeifsignal (Sh 5) anzuwenden.", "sig": ["sh3"]}, {"difficulty": "schwer", "group": "Sh", "question": "Wann wird das Horn- und Pfeifsignal (Sh 5) gegeben?", "answer": "a) wenn das Kreissignal (Sh 3) nicht gegeben werden kann oder nicht ausreichend erscheint, b) um andere Mitarbeiter zum Anhalten eines Zuges oder einer Rangierfahrt zu veranlassen.", "sig": ["sh5"]}];
+const KEY = 'signal-karteikarten.v1';
+const DIFFS = [
+  { k: 'leicht', label: 'Leicht' },
+  { k: 'mittel', label: 'Mittel' },
+  { k: 'schwer', label: 'Schwer' }
+];
+const dLabel = k => (DIFFS.find(d => d.k === k) || DIFFS[1]).label;
+
+/* ---- Signalbilder (selbst gezeichnet nach DS 301) ---- */
+const Y = '#f5d90a', K = '#141414', W = '#ffffff', GR = '#79746f', DK = '#5b5b5b';
+const svg = (w, h, inner, label) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="${label}">${inner}</svg>`;
+const pole = (x, y1, y2) => `<rect x="${x - 3}" y="${y1}" width="6" height="${y2 - y1}" fill="${GR}"/>`;
+const txt = (x, y, s, size, fill, weight = 700) => `<text x="${x}" y="${y}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="${weight}" font-size="${size}" fill="${fill}">${s}</text>`;
+const box = (x, y, w, h, fill, stroke, sw = 1.5) => `<rect x="${x - w / 2}" y="${y}" width="${w}" height="${h}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
+const stripes = (x, y, h) => {
+  let s = `<rect x="${x - 7}" y="${y}" width="14" height="${h}" fill="${W}" stroke="${K}" stroke-width="1"/>`;
+  for (let yy = y + 3; yy + 11 <= y + h; yy += 14) s += `<polygon points="${x - 7},${yy} ${x + 7},${yy + 5} ${x + 7},${yy + 11} ${x - 7},${yy + 6}" fill="${K}"/>`;
+  return s;
+};
+const bueHeadA = (x, top) => `<rect x="${x - 14}" y="6" width="28" height="52" fill="${K}"/><rect x="${x - 11}" y="9" width="22" height="46" fill="none" stroke="${Y}" stroke-width="2"/><circle cx="${x}" cy="22" r="7" fill="${top}"/><circle cx="${x}" cy="44" r="8" fill="${Y}"/>`;
+const bueHeadB = (x, top) => `<polygon points="${x - 16},12 ${x - 10},6 ${x + 10},6 ${x + 16},12 ${x + 16},58 ${x - 16},58" fill="${K}"/><circle cx="${x}" cy="22" r="7" fill="${top}"/><circle cx="${x - 8}" cy="44" r="6" fill="${Y}"/><circle cx="${x + 8}" cy="44" r="6" fill="${Y}"/>`;
+const bueBoth = (top, below) => [38, 112].map((x, i) =>
+  pole(x, 118, 152) + (i ? bueHeadB(x, top) : bueHeadA(x, top)) + stripes(x, 58, 60) + (below ? below(x) : '')).join('');
+const triDown = x => `<polygon points="${x - 17},120 ${x + 17},120 ${x},148" fill="${W}" stroke="${K}" stroke-width="1.5"/>`;
+const sqWdh = x => `<rect x="${x - 15}" y="118" width="30" height="30" fill="${W}" stroke="#888" stroke-width="1"/><rect x="${x - 12}" y="121" width="24" height="24" fill="${K}"/><circle cx="${x}" cy="133" r="8" fill="${W}"/>`;
+const lfTri = (x, oy, inner, stroke, sw, digit) =>
+  `<polygon points="${x - 28},${oy + 6} ${x + 28},${oy + 6} ${x},${oy + 56}" fill="${W}" stroke="${stroke}" stroke-width="${sw}"/>` +
+  (inner ? `<polygon points="${x - 22},${oy + 11} ${x + 22},${oy + 11} ${x},${oy + 49}" fill="${inner}"/>` : '') +
+  txt(x, oy + 36, digit, 24, K);
+const lamp = (x, y, glow) => (glow ? `<circle cx="${x}" cy="${y}" r="10" fill="${Y}" opacity="0.3"/>` : '') + `<circle cx="${x}" cy="${y}" r="4.5" fill="${Y}" stroke="${K}" stroke-width="0.8"/>`;
+const arrowPlate = x => `<rect x="${x - 28}" y="2" width="56" height="14" fill="${K}"/><rect x="${x - 22}" y="7.5" width="34" height="3" fill="${Y}"/><polygon points="${x + 12},4.5 ${x + 24},9 ${x + 12},13.5" fill="${Y}"/>`;
+const letterPlate = (letter, inner) => box(50, 8, 40, 58, W, inner ? '#888' : K, inner ? 1 : 1.5) + (inner ? `<rect x="33" y="11" width="34" height="52" fill="${Y}"/>` : '') + txt(50, 52, letter, 44, K);
+const bueTxtPlate = (x, y, fill, l1, l2) => box(x, y, 44, 44, fill, K, 1.5) + txt(x, y + 18, l1, 14, K) + txt(x, y + 35, l2, 14, K);
+const smallPlate = (x, y, l) => box(x, y, 44, 22, W, K, 1.5) + txt(x, y + 16, l, 14, K);
+const buPlate = d => box(50, 8, 44, 60, W, K, 2.5) + txt(50, 54, d, 46, K);
+const buTag = x => box(x, 68, 30, 16, W, K, 1) + txt(x, 80, 'BÜ', 11, K, 400);
+
+const SIG = {
+  bue0: { cap: 'Bü 0 – zwei Ausführungen', svg: svg(150, 152, bueBoth(DK), 'Bü 0') },
+  bue1: { cap: 'Bü 1 – weißes Blinklicht', svg: svg(150, 152, bueBoth(W), 'Bü 1') },
+  bue_kurz: { cap: 'Überwachungssignal im verkürzten Bremswegabstand', svg: svg(150, 152, bueBoth(DK, triDown), 'Überwachungssignal mit weißem Dreieck') },
+  bue_wdh: { cap: 'Überwachungssignalwiederholer', svg: svg(150, 152, bueBoth(DK, sqWdh), 'Überwachungssignalwiederholer') },
+  bue2: {
+    cap: 'Bü 2 – Rautentafel',
+    svg: svg(100, 150, pole(50, 106, 146) + box(50, 6, 32, 100, W, K, 1.5) + `<rect x="36" y="8" width="28" height="96" fill="${K}"/>` +
+      [20, 44, 68, 92].map(cy => `<polygon points="50,${cy - 12} 61,${cy} 50,${cy + 12} 39,${cy}" fill="${W}"/>`).join(''), 'Bü 2 Rautentafel')
+  },
+  bue3: {
+    cap: 'Bü 3 – Merktafel',
+    svg: svg(100, 150, pole(50, 110, 146) + box(50, 6, 32, 104, W, K, 1.5) +
+      [1, 3, 5].map(i => `<rect x="34" y="${6 + i * (104 / 7)}" width="32" height="${104 / 7}" fill="${K}"/>`).join(''), 'Bü 3 Merktafel')
+  },
+  bue4: {
+    cap: 'Bü 4 – Pfeiftafel',
+    svg: svg(150, 130, pole(40, 60, 128) + pole(110, 60, 128) + box(40, 8, 40, 52, W, K, 1.5) + txt(40, 50, 'P', 44, K) +
+      box(110, 8, 40, 52, W, '#888', 1) + `<rect x="93" y="11" width="34" height="46" fill="${K}"/>` + txt(110, 50, 'P', 44, W), 'Bü 4 Pfeiftafel')
+  },
+  bue4_halt: {
+    cap: 'Pfeiftafel vor Halteplatz',
+    svg: svg(100, 150, pole(50, 72, 146) + box(50, 6, 40, 14, W, K, 1.5) + `<rect x="36" y="6" width="8" height="14" fill="${K}"/><rect x="56" y="6" width="8" height="14" fill="${K}"/>` +
+      box(50, 20, 40, 52, W, K, 1.5) + txt(50, 62, 'P', 44, K), 'Pfeiftafel mit zwei senkrechten Streifen')
+  },
+  bue5: { cap: 'Bü 5 – Läutetafel', svg: svg(100, 150, pole(50, 60, 146) + box(50, 8, 40, 52, W, K, 1.5) + txt(50, 50, 'L', 44, K), 'Bü 5 Läutetafel') },
+  ankuende: { cap: 'Bü-Ankündetafel', svg: svg(100, 150, pole(50, 50, 146) + bueTxtPlate(50, 6, Y, 'Bü', '124,3'), 'Bü-Ankündetafel') },
+  kennz: { cap: 'Bü-Kennzeichentafel', svg: svg(100, 150, pole(50, 50, 146) + bueTxtPlate(50, 6, W, 'Bü', '124,3'), 'Bü-Kennzeichentafel') },
+  buebue: {
+    cap: 'Anfang einer gemeinsamen Einschaltstrecke',
+    svg: svg(100, 150, pole(50, 94, 146) + smallPlate(50, 4, 'Bü') + smallPlate(50, 26, 'Bü') + bueTxtPlate(50, 48, Y, 'Bü', '124,3'), 'Tafel Bü/Bü über der Bü-Ankündetafel')
+  },
+  innerhalb: {
+    cap: 'Innerhalb der Einschaltstrecke',
+    svg: svg(100, 150, pole(50, 94, 146) + bueTxtPlate(50, 4, W, 'Bü', '124,1') + bueTxtPlate(50, 48, Y, 'Bü', '124,3'), 'Kennzeichentafel über Ankündetafel')
+  },
+  lf1: {
+    cap: 'Lf 1 – Tageszeichen mit Lampen',
+    svg: svg(100, 150, pole(50, 56, 146) + lfTri(50, 0, Y, '#aaa', 1, '3') + lamp(45, 84) + lamp(55, 104), 'Lf 1 Langsamfahrscheibe')
+  },
+  lf1_nacht: {
+    cap: 'Lf 1 – Nachtzeichen',
+    svg: svg(100, 150, `<rect width="100" height="150" rx="8" fill="#2a2930"/>` + pole(50, 56, 146) + lfTri(50, 0, Y, '#ccc', 1, '3') + lamp(45, 84, true) + lamp(55, 104, true), 'Lf 1 bei Dunkelheit')
+  },
+  lf1_pfeil: {
+    cap: 'Lf 1 mit Richtungspfeil',
+    svg: svg(100, 150, pole(50, 72, 146) + arrowPlate(50) + lfTri(50, 16, Y, '#aaa', 1, '4') + lamp(45, 100) + lamp(55, 120), 'Lf 1 mit Richtungspfeil')
+  },
+  lf2: { cap: 'Lf 2 – Anfangscheibe', svg: svg(100, 150, pole(50, 66, 146) + letterPlate('A', true), 'Lf 2 Anfangscheibe') },
+  lf3: { cap: 'Lf 3 – Endscheibe', svg: svg(100, 150, pole(50, 66, 146) + letterPlate('E', false), 'Lf 3 Endscheibe') },
+  lf3_bue: { cap: 'Lf 3 mit Tafel „BÜ“', svg: svg(100, 150, pole(50, 66, 146) + letterPlate('E', false) + buTag(50), 'Lf 3 mit BÜ-Tafel') },
+  lf4: { cap: 'Lf 4 – Geschwindigkeitstafel', svg: svg(100, 150, pole(50, 56, 146) + lfTri(50, 0, null, K, 2, '5'), 'Lf 4 Geschwindigkeitstafel') },
+  lf5: { cap: 'Lf 5 – Anfangstafel', svg: svg(100, 150, pole(50, 66, 146) + letterPlate('A', false), 'Lf 5 Anfangstafel') },
+  lf6: { cap: 'Lf 6 – Ankündesignal', svg: svg(100, 150, pole(50, 56, 146) + lfTri(50, 0, Y, K, 2, '6'), 'Lf 6 Geschwindigkeits-Ankündesignal') },
+  lf6_pfeil: { cap: 'Lf 6 mit Richtungspfeil', svg: svg(100, 150, pole(50, 72, 146) + arrowPlate(50) + lfTri(50, 16, Y, K, 2, '6'), 'Lf 6 mit Richtungspfeil') },
+  lf7: { cap: 'Lf 7 – Geschwindigkeitssignal', svg: svg(100, 150, pole(50, 68, 146) + buPlate('6'), 'Lf 7 Geschwindigkeitssignal') },
+  lf7_bue: { cap: 'Lf 7 mit Tafel „BÜ“', svg: svg(100, 150, pole(50, 68, 146) + buPlate('3') + buTag(50).replace(/y="68"/, 'y="70"').replace(/y="80"/, 'y="82"'), 'Lf 7 mit BÜ-Tafel') }
+};
+
+/* ---- Vor-, Haupt- und Kombinationssignale (Modul 15, Teil 3) ---- */
+const OR = '#ffb400', RD = '#e0201b', GN = '#12a150', YL = '#f2d500', OFF = '#555555';
+const ne2 = (x, y) => box(x, y, 36, 54, W, K, 1.5) +
+  `<polygon points="${x - 18},${y} ${x - 11},${y} ${x + 18},${y + 43.5} ${x + 18},${y + 54} ${x + 11},${y + 54} ${x - 18},${y + 10.5}" fill="${K}"/>` +
+  `<polygon points="${x + 18},${y} ${x + 11},${y} ${x - 18},${y + 43.5} ${x - 18},${y + 54} ${x - 11},${y + 54} ${x + 18},${y + 10.5}" fill="${K}"/>`;
+const housing = (x, y, col) => `<circle cx="${x}" cy="${y}" r="8.5" fill="#8d8d8d"/><circle cx="${x}" cy="${y}" r="5.5" fill="${col}"/>`;
+const disc = (x, y, flat) => flat
+  ? `<rect x="${x - 26}" y="${y - 3.5}" width="52" height="7" fill="${DK}" stroke="${W}" stroke-width="1"/>`
+  : `<circle cx="${x}" cy="${y}" r="25" fill="${W}" stroke="#bbb" stroke-width="0.8"/><circle cx="${x}" cy="${y}" r="21" fill="${K}"/><circle cx="${x}" cy="${y}" r="17" fill="${OR}"/>`;
+const vwing = (x, y, ang) => `<g transform="rotate(${ang} ${x} ${y + 27})"><polygon points="${x - 8},${y} ${x + 8},${y} ${x + 8},${y + 44} ${x},${y + 54} ${x - 8},${y + 44}" fill="${W}" stroke="${K}" stroke-width="1"/><polygon points="${x - 4.5},${y + 4} ${x + 4.5},${y + 4} ${x + 4.5},${y + 42} ${x},${y + 49} ${x - 4.5},${y + 42}" fill="${OR}"/></g>`;
+const vrForm = (flat, ang, up, lo, lab) => svg(130, 180,
+  pole(26, 160, 178) + ne2(26, 106) + pole(88, 8, 178) + disc(88, 34, flat) + vwing(88, 66, ang) + housing(106, 86, up) + housing(70, 126, lo), lab);
+const tilt = (ox, oy, L, lobe) => {
+  const pts = [[50, 2.5], [77.5, 2.5], [91.5, 16.5], [91.5, 42.5], [46.5, 91.5], [17.5, 91.5], [3.5, 77.5], [3.5, 55]].map(p => (p[0] + ox) + ',' + (p[1] + oy)).join(' ');
+  const c = [[56.5, 22.5], [79, 22.5], [18.5, 71.5], [41.5, 71.5]];
+  return (lobe ? `<circle cx="${ox + 27}" cy="${oy + 22.5}" r="9.5" fill="${K}"/>` : '') + `<polygon points="${pts}" fill="${K}"/>` +
+    c.map((p, i) => `<circle cx="${p[0] + ox}" cy="${p[1] + oy}" r="7" fill="${L[i] || OFF}"/>`).join('') +
+    (lobe ? `<circle cx="${ox + 27}" cy="${oy + 22.5}" r="5.5" fill="${W}"/>` : '');
+};
+const vrLicht = (L, kind, lab) => svg(100, 170, pole(50, 88, 168) + tilt(4, 2, L, kind === 'wdh' || kind === 'kurz') + (kind === 'wdh' ? '' : ne2(50, 96)), lab);
+const wingR = (px, py, ang) => `<g transform="translate(${px} ${py}) rotate(${ang})"><rect x="-8" y="-5.5" width="70" height="11" fill="${W}" stroke="${RD}" stroke-width="2"/><circle cx="66" cy="0" r="8" fill="${W}" stroke="${RD}" stroke-width="3.5"/></g>`;
+const wingH = (px, py) => `<rect x="${px - 5.5}" y="${py}" width="11" height="50" fill="${W}" stroke="${RD}" stroke-width="2"/><circle cx="${px}" cy="${py}" r="8" fill="${W}" stroke="${RD}" stroke-width="3.5"/>`;
+const mastBlech = (x, y) => `<rect x="${x - 5.5}" y="${y}" width="11" height="12" fill="${RD}"/><rect x="${x - 5.5}" y="${y + 12}" width="11" height="14" fill="${W}" stroke="#bbb" stroke-width="0.6"/><rect x="${x - 5.5}" y="${y + 26}" width="11" height="12" fill="${RD}"/>`;
+const hpForm = (upAng, lowRaised, up, lo, lab) => svg(130, 190,
+  pole(30, 14, 188) + mastBlech(30, 150) + wingR(30, 52, upAng) + (lowRaised ? wingR(30, 98, upAng) : wingH(30, 92)) + housing(48, 68, up) + housing(48, 130, lo), lab);
+const mastSchild = (x, y) => `<rect x="${x - 5}" y="${y}" width="10" height="46" fill="${W}" stroke="#aaa" stroke-width="0.8"/><rect x="${x - 5}" y="${y + 14}" width="10" height="20" fill="${RD}"/>`;
+const hpLicht = (list, lab) => svg(100, 190, pole(50, 86, 188) + `<polygon points="28,12 34,6 66,6 72,12 72,88 28,88" fill="${K}"/>` +
+  list.map(p => `<circle cx="${50 + p[0]}" cy="${6 + p[1]}" r="6.5" fill="${p[2] || OFF}"/>`).join('') + mastSchild(50, 104), lab);
+const ksVor = (L, wdh, lab) => svg(100, 170, pole(50, 50, 168) + `<rect x="18" y="6" width="64" height="${wdh ? 62 : 46}" fill="${K}"/>` +
+  `<circle cx="36" cy="26" r="7" fill="${L[0] || OFF}"/><circle cx="64" cy="26" r="7" fill="${L[1] || OFF}"/>` + (wdh ? `<circle cx="36" cy="50" r="6" fill="${W}"/>` : ne2(50, 58)), lab);
+const ksHaupt = (L, vf, lab) => svg(100, 190, pole(50, 70, 188) + (vf
+  ? `<rect x="27" y="6" width="46" height="72" fill="${K}"/><circle cx="50" cy="26" r="7" fill="${L[0] || OFF}"/><circle cx="38" cy="58" r="7" fill="${L[1] || OFF}"/><circle cx="62" cy="58" r="7" fill="${L[2] || OFF}"/>`
+  : `<rect x="30" y="6" width="40" height="72" fill="${K}"/><circle cx="50" cy="28" r="7" fill="${L[0] || OFF}"/><circle cx="50" cy="58" r="7" fill="${L[1] || OFF}"/>`) +
+  mastSchild(50, 92) + (vf ? `<polygon points="43,142 57,142 50,172" fill="${YL}" stroke="#999" stroke-width="0.8"/>` : ''), lab);
+const ne3Board = (x, n) => pole(x, 58, 112) + box(x, 6, 26, 54, W, '#777', 1) + [0, 1, 2].filter(i => i >= 3 - n).map(i =>
+  `<polygon points="${x - 13},${8 + i * 12 + 14} ${x + 13},${8 + i * 12} ${x + 13},${8 + i * 12 + 8} ${x - 13},${8 + i * 12 + 22}" fill="${K}"/>`).join('');
+Object.assign(SIG, {
+  vr0_form: { cap: 'Vr 0 – Formsignal', svg: vrForm(false, 0, YL, YL, 'Vr 0 Formsignal') },
+  vr0_licht: { cap: 'Vr 0 – Lichtsignal', svg: vrLicht([YL, null, YL, null], '', 'Vr 0 Lichtsignal') },
+  vr1_form: { cap: 'Vr 1 – Formsignal', svg: vrForm(true, 0, GN, GN, 'Vr 1 Formsignal') },
+  vr1_licht: { cap: 'Vr 1 – Lichtsignal', svg: vrLicht([null, GN, null, GN], '', 'Vr 1 Lichtsignal') },
+  vr2_form: { cap: 'Vr 2 – Formsignal', svg: vrForm(false, -40, GN, YL, 'Vr 2 Formsignal') },
+  vr2_licht: { cap: 'Vr 2 – Lichtsignal', svg: vrLicht([null, GN, YL, null], '', 'Vr 2 Lichtsignal') },
+  hp0_form: { cap: 'Hp 0 – Formsignal', svg: hpForm(0, false, RD, OFF, 'Hp 0 Formsignal') },
+  hp0_licht1: { cap: 'Hp 0 – ein rotes Licht', svg: hpLicht([[-10, 70, RD], [10, 70, OFF]], 'Hp 0 mit einem roten Licht') },
+  hp0_licht2: { cap: 'Hp 0 – zwei rote Lichter', svg: hpLicht([[-10, 11, OFF], [-10, 27, RD], [10, 27, RD], [-10, 70, OFF]], 'Hp 0 mit zwei roten Lichtern') },
+  hp1_form: { cap: 'Hp 1 – Formsignal', svg: hpForm(-40, false, GN, OFF, 'Hp 1 Formsignal') },
+  hp1_licht: { cap: 'Hp 1 – Lichtsignal', svg: hpLicht([[-10, 11, GN], [-10, 27, OFF], [10, 27, OFF], [-10, 70, OFF]], 'Hp 1 Lichtsignal') },
+  hp2_form: { cap: 'Hp 2 – Formsignal', svg: hpForm(-40, true, GN, YL, 'Hp 2 Formsignal') },
+  hp2_licht: { cap: 'Hp 2 – Lichtsignal', svg: hpLicht([[-10, 11, GN], [-10, 27, OFF], [10, 27, OFF], [-10, 70, YL]], 'Hp 2 Lichtsignal') },
+  ks1_haupt: { cap: 'Ks 1 – Hauptsignal', svg: ksHaupt([null, GN], false, 'Ks 1 Hauptsignal') },
+  ks1_vor: { cap: 'Ks 1 – Vorsignal', svg: ksVor([GN, null], false, 'Ks 1 Vorsignal') },
+  ks2_vor: { cap: 'Ks 2 – Vorsignal', svg: ksVor([null, YL], false, 'Ks 2 Vorsignal') },
+  ks2_haupt_vf: { cap: 'Ks 2 – Hauptsignal mit Vorsignalfunktion', svg: ksHaupt([null, null, YL], true, 'Ks 2 Hauptsignal mit Vorsignalfunktion') },
+  ks_wdh: { cap: 'Vorsignalwiederholer bei Ks 2', svg: ksVor([null, YL], true, 'Vorsignalwiederholer bei Ks 2') },
+  vr_kurz: { cap: 'Lichtvorsignal im verkürzten Bremswegabstand', svg: vrLicht([YL, null, YL, null], 'kurz', 'Lichtvorsignal mit weißem Zusatzlicht') },
+  vr_wdh: { cap: 'Vorsignalwiederholer', svg: vrLicht([YL, null, YL, null], 'wdh', 'Vorsignalwiederholer') },
+  ne2: { cap: 'Ne 2 – Vorsignaltafel', svg: svg(100, 150, pole(50, 60, 148) + ne2(50, 6), 'Ne 2 Vorsignaltafel') },
+  ne2_kurz: { cap: 'Ne 2 im verkürzten Bremswegabstand', svg: svg(100, 150, pole(50, 88, 148) + `<polygon points="36,4 64,4 50,28" fill="${W}" stroke="${K}" stroke-width="1.5"/>` + ne2(50, 34), 'Ne 2 mit weißem Dreieck') },
+  ne3: {
+    cap: 'Ne 3 – Vorsignalbaken',
+    svg: svg(240, 136, `<line x1="26" y1="112" x2="206" y2="112" stroke="${K}" stroke-width="1"/>` +
+      [26, 86, 146, 206].map(x => `<line x1="${x}" y1="108" x2="${x}" y2="116" stroke="${K}" stroke-width="1"/>`).join('') +
+      ne3Board(26, 3) + ne3Board(86, 2) + ne3Board(146, 1) +
+      txt(56, 130, '75 m', 11, K, 500) + txt(116, 130, '75 m', 11, K, 500) + txt(176, 130, '100 m', 11, K, 500) + txt(206, 44, 'Vorsignal', 11, K, 500), 'Vorsignalbaken Ne 3')
+  },
+  waerter: { cap: 'Wärtervorsignal', svg: svg(110, 170, pole(55, 60, 168) + `<circle cx="55" cy="40" r="28" fill="${W}" stroke="#aaa" stroke-width="1"/><circle cx="55" cy="40" r="25" fill="${K}"/><circle cx="55" cy="40" r="20" fill="#ee7d1a"/>` + housing(76, 96, '#f5a300') + housing(70, 126, '#f5a300'), 'Wärtervorsignal') },
+  zs3: { cap: 'Zs 3', svg: svg(80, 84, `<polygon points="4,4 76,4 40,76" fill="${W}" stroke="${K}" stroke-width="1.5"/><polygon points="11,9 69,9 40,67" fill="${K}"/>` + txt(40, 40, '3', 30, W), 'Zs 3') }
+});
+
+/* ---- Fahrleitungssignale El (Signalbuch 301.1001) ---- */
+const NAVY = '#2f2b63';
+const rc = (x, y, w, h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${W}"/>`;
+const ELS = {
+  el1v: rc(-13, -7, 7, 14) + rc(6, -7, 7, 14),
+  el1: rc(-12, -16, 7, 14) + rc(5, -16, 7, 14) + rc(-12, 5, 24, 7),
+  el2: `<path d="M-13,-12 h7 v15 h12 v-15 h7 v22 h-26 z" fill="${W}"/>`,
+  el3: rc(-2, -13, 20, 7) + rc(-18, 6, 20, 7),
+  el4: rc(-24, -4, 48, 8),
+  el5: rc(-4, -24, 8, 48),
+  el6: `<polygon points="0,-21 21,0 0,21 -21,0" fill="${W}"/><polygon points="0,-15 15,0 0,15 -15,0" fill="${NAVY}"/><polygon points="0,-8 8,0 0,8 -8,0" fill="${W}"/>`,
+  ac: `<path d="M-15,4 C-10,-9 -4,-9 0,0 S10,9 15,-4" fill="none" stroke="${W}" stroke-width="3.2" stroke-linecap="round"/>` + txt(10, -9, '15', 11, W, 400),
+  dc: rc(-12, -10, 24, 6) + rc(-12, 4, 24, 6),
+  b: txt(0, 8, 'B', 24, W, 500),
+  l: txt(0, 8, 'L', 24, W, 500),
+  bl: txt(0, -3, 'B', 15, W, 500) + `<rect x="-14" y="1" width="28" height="1.5" fill="${W}"/>` + txt(0, 17, 'L', 15, W, 500),
+  d: txt(0, 6, 'D', 24, W, 400) + txt(0, 18, '15 kV', 9, W, 400),
+  ch: txt(0, 6, 'CH', 22, W, 400) + txt(0, 18, '15 kV', 9, W, 400)
+};
+const dsym = (cx, cy, r, sym) => `<polygon points="${cx},${cy - r - 4} ${cx + r + 4},${cy} ${cx},${cy + r + 4} ${cx - r - 4},${cy}" fill="${W}" stroke="${K}" stroke-width="0.8"/><polygon points="${cx},${cy - r} ${cx + r},${cy} ${cx},${cy + r} ${cx - r},${cy}" fill="${NAVY}"/><g transform="translate(${cx} ${cy}) scale(${r / 30})">${sym}</g>`;
+const elStack = (items, lab) => {
+  let y = 2, body = '';
+  for (const it of items) { const cy = y + it[1] + 4; body += dsym(50, cy, it[1], it[0]); y = cy + it[1]; }
+  return svg(100, 190, pole(50, y, 188) + body, lab);
+};
+Object.assign(SIG, {
+  el1v: { cap: 'El 1v', svg: elStack([[ELS.el1v, 30]], 'Signal El 1v') },
+  el1: { cap: 'El 1 – Ausschalten', svg: elStack([[ELS.el1, 30]], 'Signal El 1') },
+  el2: { cap: 'El 2 – Einschalten', svg: elStack([[ELS.el2, 30]], 'Signal El 2') },
+  el3: { cap: 'El 3 – Ankündesignal', svg: elStack([[ELS.el3, 30]], 'Signal El 3') },
+  el4: { cap: 'El 4 – „Bügel ab“', svg: elStack([[ELS.el4, 30]], 'Signal El 4') },
+  el5: { cap: 'El 5 – „Bügel an“', svg: elStack([[ELS.el5, 30]], 'Signal El 5') },
+  el6: { cap: 'El 6 – Halt', svg: elStack([[ELS.el6, 30]], 'Signal El 6') },
+  el1_el2: { cap: 'El 2 über El 1', svg: elStack([[ELS.el2, 30], [ELS.el1, 30]], 'El 2 über El 1 am gleichen Standort') },
+  el2_ac: { cap: 'El 2 + Wechselstrom', svg: elStack([[ELS.el2, 30], [ELS.ac, 26]], 'El 2 mit Zusatztafel Wechselstrom') },
+  el2_dc: { cap: 'El 2 + Gleichstrom', svg: elStack([[ELS.el2, 30], [ELS.dc, 26]], 'El 2 mit Zusatztafel Gleichstrom') },
+  el3_b: { cap: 'El 3 mit „B“', svg: elStack([[ELS.el3, 30], [ELS.b, 26]], 'El 3 mit Kennbuchstabe B') },
+  el4_b: { cap: 'El 4 mit „B“', svg: elStack([[ELS.el4, 30], [ELS.b, 26]], 'El 4 mit Kennbuchstabe B') },
+  el4_bl: { cap: 'El 4 mit „B“ über „L“', svg: elStack([[ELS.el4, 30], [ELS.bl, 26]], 'El 4 mit Kennbuchstaben B und L in einer Zusatztafel') },
+  el4_b2: { cap: 'El 4 mit zwei Tafeln', svg: elStack([[ELS.el4, 30], [ELS.b, 20], [ELS.l, 20]], 'El 4 mit zwei Zusatztafeln') },
+  el6_d: { cap: 'El 6 mit „D“', svg: elStack([[ELS.el6, 30], [ELS.d, 26]], 'El 6 mit Länderkennung D') },
+  el6_ch: { cap: 'El 6 mit „CH“', svg: elStack([[ELS.el6, 30], [ELS.ch, 26]], 'El 6 mit Länderkennung CH') }
+});
+
+/* ---- Signale an Fahrzeugen / Zügen (Fz, Zg) ---- */
+const FZB = '#4a4a4a', FZD = '#2b2b2b';
+const fzLamp = (x, y, c, r = 4.5, on = true) => `<rect x="${x - 6}" y="${y - 9}" width="12" height="20" rx="2" fill="${FZD}"/><circle cx="${x}" cy="${y}" r="${r}" fill="${on ? c : '#777'}"/>`;
+const wagonBody = (flags) => `<rect width="170" height="150" fill="#d8d8d8"/>
+<path d="M40,28 Q85,-2 130,28 L130,112 L40,112 Z" fill="${FZB}" stroke="${FZD}" stroke-width="2"/>
+<rect x="52" y="34" width="66" height="70" fill="#3a3a3a" stroke="${FZD}"/>
+<line x1="85" y1="34" x2="85" y2="104" stroke="${FZD}"/>
+<circle cx="52" cy="116" r="8" fill="#555" stroke="${FZD}" stroke-width="2"/><circle cx="118" cy="116" r="8" fill="#555" stroke="${FZD}" stroke-width="2"/>
+<rect x="80" y="112" width="10" height="12" fill="#555"/>
+<rect x="56" y="124" width="58" height="6" fill="${FZD}"/><rect x="62" y="124" width="4" height="18" fill="${FZD}"/><rect x="104" y="124" width="4" height="18" fill="${FZD}"/>
+<line x1="30" y1="143" x2="140" y2="143" stroke="${K}" stroke-width="1.5"/>` + (flags || '');
+const flag = (x, y, dir) => `<line x1="${x}" y1="${y + 8}" x2="${x + dir * 8}" y2="${y}" stroke="${FZD}" stroke-width="2"/><polygon points="${x + dir * 8},${y - 8} ${x + dir * 20},${y} ${x + dir * 8},${y + 8} ${x + dir * 2},${y}" fill="${Y}" stroke="${FZD}" stroke-width=".8"/>`;
+const refl = (x, y) => `<rect x="${x - 6}" y="${y}" width="12" height="20" fill="${W}" stroke="${FZD}" stroke-width=".8"/><polygon points="${x - 6},${y} ${x + 6},${y} ${x},${y + 10}" fill="${RD}"/><polygon points="${x - 6},${y + 20} ${x + 6},${y + 20} ${x},${y + 10}" fill="${RD}"/>`;
+const locoFront = (lights) => `<rect width="170" height="150" fill="#d8d8d8"/>
+<path d="M62,14 h46 l8,6 v8 h-62 v-8 z" fill="none" stroke="${FZD}" stroke-width="2"/>
+<polygon points="40,36 130,36 138,50 138,112 32,112 32,50" fill="${FZB}" stroke="${FZD}" stroke-width="2"/>
+<rect x="46" y="40" width="36" height="24" fill="#6a6a6a" stroke="${FZD}"/><rect x="88" y="40" width="36" height="24" fill="#6a6a6a" stroke="${FZD}"/>
+<circle cx="50" cy="118" r="8" fill="#555" stroke="${FZD}" stroke-width="2"/><circle cx="120" cy="118" r="8" fill="#555" stroke="${FZD}" stroke-width="2"/>
+<rect x="76" y="112" width="18" height="10" fill="#555"/>
+<rect x="46" y="126" width="12" height="14" fill="${FZD}"/><rect x="112" y="126" width="12" height="14" fill="${FZD}"/>
+<line x1="20" y1="143" x2="150" y2="143" stroke="${K}" stroke-width="1.5"/>` + lights;
+const wl = (x, y) => `<circle cx="${x}" cy="${y}" r="4.5" fill="${W}" stroke="${FZD}" stroke-width="1"/>`;
+Object.assign(SIG, {
+  fz1: { cap: 'Fz 1 – Rangierlokomotivsignal (Nacht)', svg: svg(170, 150, locoFront(wl(52, 126) + wl(118, 126)), 'Signal Fz 1: vorn und hinten ein weißes Licht in Höhe der Puffer') },
+  fz2: { cap: 'Fz 2 – Gelbe Fahne', svg: svg(170, 150, wagonBody(flag(46, 28, -1) + flag(124, 28, 1)), 'Signal Fz 2: gelbe Fahnen an den Langseiten des Wagens') },
+  zg1a: { cap: 'Zg 1a – Dreilicht-Spitzensignal', svg: svg(170, 150, locoFront(wl(85, 70) + wl(58, 98) + wl(112, 98)), 'Signal Zg 1a: drei weiße Lichter in Form eines A') },
+  zg1b: { cap: 'Zg 1b – zwei weiße Lichter', svg: svg(170, 150, wagonBody(fzLamp(56, 100, W) + fzLamp(114, 100, W)), 'Signal Zg 1b: zwei weiße Lichter in gleicher Höhe') },
+  zg2: { cap: 'Zg 2 – zwei rote Lichter', svg: svg(170, 150, wagonBody(fzLamp(56, 100, RD) + fzLamp(114, 100, RD)), 'Signal Zg 2: zwei rote Lichter') },
+  zg2s: { cap: 'Zg 2 – reflektierende Schilder', svg: svg(170, 150, wagonBody(refl(56, 90) + refl(114, 90)), 'Signal Zg 2: zwei rechteckige reflektierende Schilder') },
+  zg2sd: { cap: 'Zg 2 – Schild im Detail', svg: svg(100, 140, `<rect width="100" height="140" fill="#d8d8d8"/><rect x="25" y="10" width="50" height="120" fill="${W}" stroke="${K}"/><polygon points="25,10 75,10 50,70" fill="${RD}"/><polygon points="25,130 75,130 50,70" fill="${RD}"/>`, 'Schlusssignal-Schild: weiße Fläche, rotes Dreieck oben und unten, Spitzen berühren sich in der Mitte') }
+});
+
+/* ---- Weichensignale Wn (Signalbuch 301.0801) ---- */
+const wnBlack = '#1d1d1d';
+const wnForm = (inner) => svg(90, 100, `<polygon points="10,10 80,10 80,80 10,80" fill="${wnBlack}"/>${inner}<rect x="40" y="80" width="10" height="6" fill="${GR}"/><rect x="43" y="86" width="4" height="8" fill="${GR}"/>`, 'Formsignal');
+const wnStrip = (cx, cy, ang, len = 36, w = 8) => `<rect x="${cx - len / 2}" y="${cy - w / 2}" width="${len}" height="${w}" fill="${W}" transform="rotate(${ang} ${cx} ${cy})"/>`;
+const wnLs = (lit) => {
+  const pos = { tl: [28, 28], tr: [62, 28], c: [45, 45], bl: [28, 62], br: [62, 62] };
+  let s = `<rect x="10" y="10" width="70" height="70" fill="#3a3a3a" stroke="${K}" stroke-width="2"/>`;
+  for (const k of ['tl', 'tr', 'bl', 'br', 'c']) {
+    if (k === 'c' && !lit.includes('c')) continue;
+    const on = lit.includes(k);
+    s += `<circle cx="${pos[k][0]}" cy="${pos[k][1]}" r="9" fill="${on ? W : 'none'}" stroke="${on ? K : '#666'}" stroke-width="${on ? 1 : 1.2}"/>`;
+  }
+  return svg(90, 120, s + `<rect x="42" y="80" width="6" height="30" fill="${GR}"/>`, 'Lichtsignal');
+};
+const wnDisc = (extra) => `<circle cx="45" cy="45" r="27" fill="${W}"/>` + (extra || '');
+Object.assign(SIG, {
+  wn1f: { cap: 'Wn 1 – Formsignal', svg: wnForm(`<rect x="31" y="22" width="28" height="46" fill="${wnBlack}" stroke="${W}" stroke-width="7"/>`) },
+  wn1l: { cap: 'Wn 1 – Lichtsignal', svg: wnLs(['tr', 'br']) },
+  wn2f: { cap: 'Wn 2 – Formsignal (links / rechts)', svg: wnForm(wnStrip(45, 45, 45, 54, 10) + `<polygon points="22,22 22,40 40,22" fill="${W}"/>`) },
+  wn2fr: { cap: 'Wn 2 – Pfeil nach rechts oben', svg: wnForm(wnStrip(45, 45, -45, 54, 10) + `<polygon points="68,22 68,40 50,22" fill="${W}"/>`) },
+  wn2l: { cap: 'Wn 2 – Lichtsignal', svg: wnLs(['bl', 'br']) },
+  wnHz: { cap: 'Von Herzstück: runde Scheibe', svg: wnForm(wnDisc()) },
+  wnHzS: { cap: 'Von Herzstück (Außenbogen): Sichel nach links', svg: wnForm(wnDisc(`<path d="M45,18 Q56,45 45,72" fill="none" stroke="${wnBlack}" stroke-width="5"/><path d="M45,18 Q56,45 45,72" fill="none" stroke="${wnBlack}" stroke-width="0"/>`)) },
+  wnHzSr: { cap: 'Von Herzstück (Außenbogen): Sichel nach rechts', svg: wnForm(wnDisc(`<path d="M45,18 Q34,45 45,72" fill="none" stroke="${wnBlack}" stroke-width="5"/>`)) },
+  wn3f: { cap: 'Wn 3 – Formsignal', svg: wnForm(wnStrip(32, 58, -45, 18, 8) + wnStrip(58, 32, -45, 18, 8)) },
+  wn3l: { cap: 'Wn 3 – Lichtsignal', svg: wnLs(['tr', 'c', 'bl']) },
+  wn4f: { cap: 'Wn 4 – Formsignal', svg: wnForm(wnStrip(32, 32, 45, 18, 8) + wnStrip(58, 58, 45, 18, 8)) },
+  wn4l: { cap: 'Wn 4 – Lichtsignal', svg: wnLs(['tl', 'c', 'br']) },
+  wn5f: { cap: 'Wn 5 – Formsignal', svg: wnForm(wnStrip(37, 32, 45, 22, 8) + wnStrip(37, 58, -45, 22, 8)) },
+  wn5l: { cap: 'Wn 5 – Lichtsignal', svg: wnLs(['tl', 'c', 'bl']) },
+  wn6f: { cap: 'Wn 6 – Formsignal', svg: wnForm(wnStrip(53, 32, -45, 22, 8) + wnStrip(53, 58, 45, 22, 8)) },
+  wn6l: { cap: 'Wn 6 – Lichtsignal', svg: wnLs(['tr', 'c', 'br']) },
+  wn7: { cap: 'Wn 7 – Gleissperre abgelegt', svg: wnForm(wnDisc(`<rect x="42" y="14" width="6" height="62" fill="${wnBlack}"/>`)) }
+});
+
+/* ---- Sonstige Rangiersignale Ra 10–13 (Signalbuch 301.0703) ---- */
+const raPole = (x, y1, y2) => `<rect x="${x - 3}" y="${y1}" width="6" height="${y2 - y1}" fill="#3b2f2a"/>`;
+const raPlate = (label) => `<path d="M20,70 V40 A30,30 0 0 1 80,40 V70 Z" fill="${W}" stroke="${K}" stroke-width="2"/>` + (label ? txt(50, 38, 'Halt', 17, K, 700) + txt(50, 50, 'für', 9, K, 700) + txt(50, 63, 'Rangierfahrten', 8, K, 700) : '');
+const raW = (fill, tri) => `<polygon points="14,12 86,12 66,56 34,56" fill="${fill}" stroke="${K}" stroke-width="3" stroke-linejoin="round"/>` + `<path d="M30,19 L38,19 L43,38 L50,24 L57,38 L62,19 L70,19 L61,46 L55,46 L50,35 L45,46 L39,46 Z" fill="${tri}" stroke="${tri}" stroke-width="1.2"/>`;
+Object.assign(SIG, {
+  ra10: { cap: 'Ra 10 – Rangierhalttafel', svg: svg(100, 140, raPlate(true) + raPole(50, 70, 138), 'Signal Ra 10: weiße Tafel mit Aufschrift Halt für Rangierfahrten') },
+  ra10b: { cap: 'Ra 10 – ohne Aufschrift', svg: svg(100, 140, raPlate(false) + raPole(50, 70, 138), 'Signal Ra 10 ohne Aufschrift') },
+  ra11: { cap: 'Ra 11 / Ra 11a – Wartezeichen', svg: svg(100, 140, raPole(50, 56, 138) + raW(YL, K), 'Signal Ra 11: gelbes W mit schwarzem Rand') },
+  ra11b: { cap: 'Ra 11b – Wartezeichen (weiß)', svg: svg(100, 140, raPole(50, 56, 138) + raW(W, K), 'Signal Ra 11b: weißes W mit schwarzem Rand') },
+  ra12: { cap: 'Ra 12 / So 12 – Grenzzeichen', svg: svg(100, 140, `<path d="M38,120 V60 A12,12 0 0 1 62,60 V120 Z" fill="#a8201f" stroke="${W}" stroke-width="3"/><path d="M38,120 V96 H62 V120 Z" fill="${W}"/><path d="M38,84 V66 A12,12 0 0 1 62,66 V84 Z" fill="${W}" opacity="0"/>`, 'Signal Ra 12: rot-weißes Zeichen') },
+  ra13: { cap: 'Ra 13 – Isolierzeichen', svg: svg(100, 100, `<circle cx="50" cy="50" r="40" fill="${W}" stroke="${K}" stroke-width="2"/><path d="M22,44 H48 V32 L76,50 L48,68 V56 H22 Z" fill="#1f3a93"/>`, 'Signal Ra 13: blauer Pfeil auf weißem Grund') }
+});
+
+/* ---- Zusatzsignale Zs (Signalbuch 301.0301) ---- */
+const ZSK = '#2e2e2e', ZSW = '#f4f4f4', ZSY = '#f2d500', ZSO = '#f0a000';
+const zsFont = {
+  K: ['X...X', 'X..X.', 'X.X..', 'XX...', 'X.X..', 'X..X.', 'X...X'],
+  6: ['.XXX.', 'X....', 'X....', 'XXXX.', 'X...X', 'X...X', '.XXX.'],
+  T: ['X....', 'X....', 'X....', 'XXXXX', 'X....', 'X....', 'X....']
+};
+const zsMatrix = (ch, color) => {
+  const pat = zsFont[ch], s = 11, ox = 14, oy = 14, w = 5 * s + 2 * ox - 4, h = 7 * s + 2 * oy - 4;
+  let o = `<rect width="${w}" height="${h}" rx="3" fill="${ZSK}" stroke="${K}" stroke-width="1.5"/>`;
+  pat.forEach((row, r) => [...row].forEach((c, i) => { o += `<circle cx="${ox + i * s}" cy="${oy + r * s}" r="3.4" fill="${c === 'X' ? color : '#4c4c4c'}"/>`; }));
+  return svg(w, h, o, 'Lichtsignal');
+};
+const zsDots = (pts, color, w, h, rays) => {
+  let o = `<rect width="${w}" height="${h}" rx="3" fill="${ZSK}" stroke="${K}" stroke-width="1.5"/>`;
+  pts.forEach(p => { o += `<circle cx="${p[0]}" cy="${p[1]}" r="3.6" fill="${color}"/>`; if (rays) o += `<path d="M${p[0] - 7},${p[1] - 7} l3,3 M${p[0] + 7},${p[1] - 7} l-3,3 M${p[0] - 7},${p[1] + 7} l3,-3 M${p[0] + 7},${p[1] + 7} l-3,-3" stroke="${color}" stroke-width="1.6"/>`; });
+  return svg(w, h, o, 'Lichtsignal');
+};
+const zsLine = (x1, y1, x2, y2, n) => Array.from({ length: n }, (_, i) => [x1 + (x2 - x1) * i / (n - 1), y1 + (y2 - y1) * i / (n - 1)]);
+const zsTri = (digit, color, up) => svg(100, 96, `<polygon points="${up ? '50,8 92,86 8,86' : '8,10 92,10 50,88'}" fill="#141414" stroke="${color}" stroke-width="5" stroke-linejoin="round"/>` + txt(50, up ? 70 : 52, digit, 34, color, 300), 'Formsignal');
+const zsHouse = (inner) => `<path d="M30,8 H70 L92,50 V74 H8 V50 Z" fill="${ZSK}" stroke="${K}" stroke-width="1.5"/>${inner}`;
+const zsA = (c, rays) => svg(100, 82, zsHouse([[50, 24], [26, 58], [74, 58]].map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="6" fill="${c}"/>` + (rays ? `<path d="M${p[0] - 11},${p[1] - 11} l4,4 M${p[0] + 11},${p[1] - 11} l-4,4 M${p[0] - 11},${p[1] + 11} l4,-4 M${p[0] + 11},${p[1] + 11} l-4,-4" stroke="${c}" stroke-width="2"/>` : '')).join('')), 'Lichtsignal: drei Lichter in Form eines A');
+const zsArrowPts = [[35, 8], [14, 30], [14, 108], [24, 108], [35, 98], [46, 108], [56, 108], [56, 30]];
+Object.assign(SIG, {
+  zs1: { cap: 'Zs 1 – drei weiße Lichter (A)', svg: zsA(W, false) },
+  zs1b: { cap: 'Zs 1 – weißes Blinklicht', svg: zsDots([[22, 22], [48, 22], [35, 45], [22, 68], [48, 68]].map(p => p), '#555', 70, 90).replace('</svg>', `<circle cx="22" cy="45" r="4.5" fill="${W}"/><path d="M13,36 l4,4 M31,36 l-4,4 M13,54 l4,-4 M31,54 l-4,-4" stroke="${W}" stroke-width="1.8"/></svg>`) },
+  zs2: { cap: 'Zs 2 – Richtungsanzeiger (weiß)', svg: zsMatrix('K', ZSW) },
+  zs2v: { cap: 'Zs 2v – Richtungsvoranzeiger (gelb)', svg: zsMatrix('K', ZSO) },
+  zs3f: { cap: 'Zs 3 – Formsignal (Spitze unten)', svg: zsTri('6', W, false) },
+  zs3fu: { cap: 'Zs 3 – Formsignal (Spitze oben)', svg: zsTri('6', W, true) },
+  zs3l: { cap: 'Zs 3 – Lichtsignal (weiß)', svg: zsMatrix('6', ZSW) },
+  zs3vf: { cap: 'Zs 3v – Formsignal (gelb)', svg: zsTri('6', ZSY, false) },
+  zs3vl: { cap: 'Zs 3v – Lichtsignal (gelb)', svg: zsMatrix('6', ZSY) },
+  zs6l: { cap: 'Zs 6 – Lichtsignal', svg: zsDots([[22, 18], [22, 28], ...zsLine(24, 30, 52, 76, 9), [52, 84]], W, 74, 100) },
+  zs6f: { cap: 'Zs 6 – Formsignal', svg: svg(76, 104, `<rect x="2" y="2" width="72" height="100" fill="${W}" stroke="${K}"/><rect x="8" y="8" width="60" height="88" fill="#1d1d1d"/><polyline points="24,22 24,26 50,72 50,82" fill="none" stroke="${W}" stroke-width="8" stroke-linejoin="miter"/>`, 'Formsignal Zs 6') },
+  zs7: { cap: 'Zs 7 – drei gelbe Lichter (V)', svg: zsDots([[22, 22], [58, 22], [40, 52]], ZSY, 80, 72) },
+  zs8: { cap: 'Zs 8 – drei blinkende weiße Lichter (A)', svg: zsA(W, true) },
+  zs8b: { cap: 'Zs 8 – weißblinkender Lichtstreifen', svg: zsDots(zsLine(18, 18, 62, 76, 7), W, 80, 92, true) },
+  zs10f: { cap: 'Zs 10 – Formsignal', svg: svg(70, 118, `<polygon points="35,4 66,32 66,108 4,108 4,32" fill="${W}" stroke="${K}" stroke-width="1"/><polygon points="35,22 56,40 56,98 35,86 14,98 14,40" fill="#141414"/>`, 'Formsignal Zs 10: weißer Pfeil, Spitze nach oben') },
+  zs10l: { cap: 'Zs 10 – Lichtsignal', svg: zsDots([[35, 10], ...zsLine(32, 14, 14, 30, 4), ...zsLine(38, 14, 56, 30, 4), ...zsLine(14, 34, 14, 100, 8), ...zsLine(56, 34, 56, 100, 8), ...zsLine(14, 104, 35, 94, 4), ...zsLine(56, 104, 35, 94, 4)], W, 70, 118) },
+  zs12: { cap: 'Zs 12 – M-Tafel', svg: svg(84, 84, `<rect x="4" y="4" width="76" height="76" fill="${W}" stroke="#a8201f" stroke-width="3"/>` + `<text x="42" y="62" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="56" fill="#a8201f">M</text>`, 'Signal Zs 12: weiße Tafel mit rotem Rand und rotem M') },
+  zs13f: { cap: 'Zs 13 – Formsignal', svg: svg(70, 104, `<rect x="2" y="2" width="66" height="100" fill="#1d1d1d"/><rect x="10" y="12" width="7" height="80" fill="${ZSY}"/><rect x="17" y="48" width="38" height="7" fill="${ZSY}"/>`, 'Formsignal Zs 13: um 90° nach links umgelegtes gelbes T') },
+  zs13l: { cap: 'Zs 13 – Lichtsignal', svg: zsMatrix('T', ZSY) }
+});
+
+/* ---- Schutzsignale Sh (Signalbuch 301.0601) ---- */
+const shDisc = (bar) => `<rect x="4" y="4" width="82" height="82" fill="#1d1d1d"/><circle cx="45" cy="45" r="30" fill="${W}"/>` + bar;
+const shPost = (x, y1, y2) => `<rect x="${x - 3}" y="${y1}" width="6" height="${y2 - y1}" fill="${GR}"/>`;
+const shArrowCircle = (inner, lamp) => svg(120, 120, `<circle cx="60" cy="62" r="40" fill="none" stroke="${K}" stroke-width="3"/>` +
+  `<polygon points="16,66 24,66 20,76" fill="${K}"/><polygon points="96,70 104,70 100,60" fill="${K}"/><polygon points="52,100 52,108 62,104" fill="${K}"/>` + inner, lamp ? 'Nachtzeichen Sh 3' : 'Tageszeichen Sh 3');
+Object.assign(SIG, {
+  sh0: { cap: 'Sh 0 – Halt! Fahrverbot', svg: svg(90, 140, shDisc(`<rect x="15" y="40" width="60" height="10" fill="#1d1d1d"/>`) + shPost(45, 86, 138), 'Signal Sh 0: waagerechter schwarzer Streifen in runder weißer Scheibe') },
+  sh0b: { cap: 'Sh 0 – Rückseite (bei Tage)', svg: svg(130, 100, `<rect x="4" y="4" width="122" height="62" fill="#1d1d1d"/><circle cx="34" cy="35" r="22" fill="${W}"/><circle cx="96" cy="35" r="22" fill="${W}"/>`, 'Rückseite: zwei weiße Scheiben nebeneinander') },
+  sh1f: { cap: 'Sh 1 – Formsignal', svg: svg(90, 140, shDisc(`<polygon points="22,68 28,74 70,22 64,16" fill="#1d1d1d" transform="translate(0 0)"/>`) + shPost(45, 86, 138), 'Signal Sh 1 Formsignal: nach rechts steigender schwarzer Streifen in weißer Scheibe') },
+  sh1l: { cap: 'Sh 1 / Ra 12 – Lichtsignal', svg: wnLs(['bl', 'tr']) },
+  sh1b: { cap: 'Sh 1 – Formsignal von hinten', svg: svg(90, 140, shDisc('') + shPost(45, 86, 138), 'Rückseite Sh 1: weiße runde Scheibe auf schwarzem Grund') },
+  sh2: { cap: 'Sh 2 – Tageszeichen', svg: svg(100, 120, `<rect x="6" y="6" width="88" height="46" rx="4" fill="${W}" stroke="${K}" stroke-width="2"/><rect x="14" y="14" width="72" height="30" fill="#d4201b"/>` + shPost(50, 52, 116), 'Signal Sh 2: rechteckige rote Scheibe mit weißem Rand') },
+  sh2n: { cap: 'Sh 2 – Nachtzeichen', svg: svg(100, 130, `<rect x="6" y="22" width="88" height="46" rx="4" fill="#8d8d8d" stroke="${K}" stroke-width="2"/><circle cx="50" cy="12" r="8" fill="#d4201b" stroke="${K}"/>` + shPost(50, 68, 126), 'Nachtzeichen Sh 2: ein rotes Licht am Tageszeichen') },
+  sh3: { cap: 'Sh 3 – Tageszeichen', svg: shArrowCircle(`<line x1="62" y1="20" x2="78" y2="46" stroke="#333" stroke-width="3"/><polygon points="48,10 92,2 100,26 56,34" fill="${W}" stroke="#aaa"/><polygon points="52,16 94,8 98,22 56,30" fill="#d4201b"/>`, false) },
+  sh3n: { cap: 'Sh 3 – Nachtzeichen', svg: shArrowCircle(`<rect x="62" y="6" width="18" height="18" fill="#4a4a4a"/><circle cx="71" cy="15" r="5" fill="#d4201b"/>`, true) },
+  sh5: { cap: 'Sh 5 – drei kurze Töne, mehrfach', svg: svg(190, 40, [14, 30, 46, 80, 96, 112, 146, 162, 178].map(x => `<circle cx="${x}" cy="20" r="6" fill="${K}"/>`).join(''), 'Sh 5: mehrmals nacheinander drei kurze Töne') }
+});
+
+const SEED_BASE = 46; // so viele Karten wurden schon in früheren Versionen mitgeliefert
+const GROUPS = [
+  { k: 'Bü', t: 'Bahnübergangssignale' }, { k: 'Lf', t: 'Langsamfahrsignale' },
+  { k: 'Vr', t: 'Vorsignale' }, { k: 'Hp', t: 'Hauptsignale' }, { k: 'Ks', t: 'Kombinationssignale' }, { k: 'Sh', t: 'Schutzsignale' },
+  { k: 'El', t: 'Fahrleitungssignale' }, { k: 'Fz', t: 'Signale an Fahrzeugen' }, { k: 'Zg', t: 'Signale an Zügen' },
+  { k: 'Wn', t: 'Weichensignale' }, { k: 'Ra', t: 'Rangiersignale' }, { k: 'Zs', t: 'Zusatzsignale' },
+  { k: 'Eigene', t: 'Eigene Karten' }
+];
+const gKey = k => GROUPS.some(x => x.k === k) ? k : 'Eigene';
+const gIdx = k => GROUPS.findIndex(x => x.k === gKey(k));
+function seedCard(c, i) {
+  return { id: 's' + (i + 1), d: c.difficulty, g: gKey(c.group), q: c.question, a: c.answer, sig: c.sig || [], look: c.look || '' };
+}
+function fresh() {
+  return { cards: SEED.map(seedCard), known: {}, seen: SEED.map((c, i) => 's' + (i + 1)) };
+}
+function migrate(s) {
+  for (const c of s.cards) {
+    const m = /^s(\d+)$/.exec(c.id);
+    const base = m && SEED[+m[1] - 1];
+    if (base && c.sig === undefined) { c.sig = base.sig || []; c.look = base.look || ''; }
+    if (base) c.g = gKey(base.group); else c.g = gKey(c.g);
+  }
+  if (!Array.isArray(s.seen)) s.seen = SEED.slice(0, SEED_BASE).map((c, i) => 's' + (i + 1));
+  SEED.forEach((c, i) => {
+    const id = 's' + (i + 1);
+    if (s.seen.indexOf(id) === -1) {
+      s.seen.push(id);
+      if (!s.cards.some(x => x.id === id)) s.cards.push(seedCard(c, i));
+    }
+  });
+  return s;
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) {
+      const s = JSON.parse(raw);
+      if (s && Array.isArray(s.cards)) {
+        s.known = s.known || {};
+        const m = migrate(s);
+        try { localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) {}
+        return m;
+      }
+    }
+  } catch (e) {}
+  return fresh();
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); return true; } catch (e) { return false; } }
+
+function readImage(file) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onerror = () => rej(new Error('read'));
+    fr.onload = () => {
+      const im = new Image();
+      im.onerror = () => rej(new Error('img'));
+      im.onload = () => {
+        const sc = Math.min(1, 900 / Math.max(im.width, im.height));
+        const w = Math.max(1, Math.round(im.width * sc)), h = Math.max(1, Math.round(im.height * sc));
+        const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+        const cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, w, h); cx.drawImage(im, 0, 0, w, h);
+        res(cv.toDataURL('image/jpeg', 0.82));
+      };
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+
+let state = load();
+let filter = 'alle';
+let gfilter = 'alle';
+let view = null; // {type:'study', ids, i, shown} | {type:'edit', id, d, armed} | {type:'manage', armed}
+let toastTimer = null;
+
+function el(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  for (const k in props || {}) {
+    const v = props[k];
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v === true) e.setAttribute(k, '');
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null || kid === false) continue;
+    e.append(kid.nodeType ? kid : document.createTextNode(kid));
+  }
+  return e;
+}
+const $ = id => document.getElementById(id);
+const byId = id => state.cards.find(c => c.id === id);
+const ordered = () => state.cards.map((c, i) => [c, i]).sort((a, b) => gIdx(a[0].g) - gIdx(b[0].g) || a[1] - b[1]).map(x => x[0]);
+const visible = () => ordered().filter(c => (filter === 'alle' || c.d === filter) && (gfilter === 'alle' || gKey(c.g) === gfilter));
+
+function toast(t) {
+  const n = $('toast'); n.textContent = t; n.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { n.hidden = true; }, 2200);
+}
+
+function renderMain() {
+  const total = state.cards.length;
+  const known = state.cards.filter(c => state.known[c.id]).length;
+  $('progressText').textContent = known + ' von ' + total + ' Karten gewusst';
+  $('progressBar').style.width = (total ? known / total * 100 : 0) + '%';
+
+  const chips = $('chips'); chips.replaceChildren();
+  const opts = [{ k: 'alle', label: 'Alle' }, ...DIFFS];
+  for (const o of opts) {
+    const n = o.k === 'alle' ? total : state.cards.filter(c => c.d === o.k).length;
+    chips.append(el('button', {
+      class: 'chip', type: 'button', 'aria-pressed': String(filter === o.k),
+      onclick: () => { filter = o.k; renderMain(); }
+    }, o.k !== 'alle' && el('span', { class: 'dot ' + o.k }), o.label, el('span', { class: 'n' }, String(n))));
+  }
+
+  const gch = $('gchips'); gch.replaceChildren();
+  const gopts = [{ k: 'alle', t: 'Alle' }, ...GROUPS.filter(x => state.cards.some(c => gKey(c.g) === x.k))];
+  for (const o of gopts) {
+    const n = o.k === 'alle' ? total : state.cards.filter(c => gKey(c.g) === o.k).length;
+    gch.append(el('button', {
+      class: 'chip', type: 'button', 'aria-pressed': String(gfilter === o.k), title: o.k === 'alle' ? '' : o.t,
+      onclick: () => { gfilter = o.k; renderMain(); }
+    }, o.k === 'alle' ? 'Alle Blöcke' : o.k, el('span', { class: 'n' }, String(n))));
+  }
+
+  const grid = $('grid'); grid.replaceChildren();
+  const list = visible();
+  const all = ordered();
+  $('empty').hidden = list.length > 0;
+  for (const g of GROUPS) {
+    const items = list.filter(c => gKey(c.g) === g.k);
+    if (!items.length) continue;
+    const inner = el('div', { class: 'grid' });
+    for (const c of items) {
+      const num = all.indexOf(c) + 1;
+      const isKnown = !!state.known[c.id];
+      inner.append(el('button', {
+        class: 'tile ' + c.d + (isKnown ? ' known' : ''), type: 'button',
+        'aria-label': g.k + ', Karte ' + num + ', ' + dLabel(c.d) + (isKnown ? ', gewusst' : ''),
+        onclick: () => openStudy(c.id)
+      }, el('span', { class: 'num' }, String(num)), el('span', { class: 'lbl' }, dLabel(c.d)), isKnown && el('span', { class: 'ok', 'aria-hidden': 'true' }, '✓')));
+    }
+    const kn = items.filter(c => state.known[c.id]).length;
+    grid.append(el('section', { class: 'gsec', 'aria-label': g.k + ' – ' + g.t },
+      el('h2', null, g.k, el('span', { class: 'gt' }, g.t), el('span', { class: 'gn' }, kn + '/' + items.length + ' gewusst')), inner));
+  }
+}
+
+function openStudy(id) {
+  const ids = visible().map(c => c.id);
+  view = { type: 'study', ids, i: Math.max(0, ids.indexOf(id)), shown: false };
+  renderOverlay();
+}
+function closeView() { view = null; renderOverlay(); renderMain(); }
+
+function renderOverlay() {
+  const ov = $('overlay');
+  ov.replaceChildren();
+  if (!view) { ov.hidden = true; document.body.style.overflow = ''; return; }
+  ov.hidden = false; document.body.style.overflow = 'hidden';
+  let panel;
+  if (view.type === 'study') panel = studyPanel();
+  else if (view.type === 'edit') panel = editPanel();
+  else panel = managePanel();
+  ov.append(panel);
+  const first = panel.querySelector('[data-autofocus]');
+  if (first) first.focus();
+}
+$('overlay').addEventListener('click', e => { if (e.target === $('overlay')) closeView(); });
+
+function advance() {
+  if (view.i < view.ids.length - 1) { view.i++; view.shown = false; renderOverlay(); }
+  else { closeView(); toast('Alle Karten dieser Stufe durch'); }
+}
+
+function looksBlock(c) {
+  const keys = (c.sig || []).filter(k => SIG[k]);
+  if (!keys.length && !c.img) return null;
+  const wrap = el('div', null, el('span', { class: 'field-label' }, 'So sieht es aus'));
+  const row = el('div', { class: 'sigs' });
+  if (c.img) row.append(el('figure', { class: 'sig' }, el('img', { src: c.img, alt: 'Eigenes Bild des Signals' }), el('figcaption', null, 'Eigenes Bild')));
+  for (const k of keys) {
+    const fig = el('figure', { class: 'sig' });
+    fig.innerHTML = SIG[k].svg; // eigene, feste Zeichnungen
+    fig.append(el('figcaption', null, SIG[k].cap));
+    row.append(fig);
+  }
+  wrap.append(row);
+  if (c.look) wrap.append(el('p', { class: 'look' }, c.look));
+  return wrap;
+}
+
+function studyPanel() {
+  const c = byId(view.ids[view.i]);
+  const num = ordered().indexOf(c) + 1;
+  const foot = el('div', { class: 'pfoot' });
+  if (!view.shown) {
+    foot.append(el('div', { class: 'row' },
+      el('button', { class: 'btn wide', type: 'button', 'data-autofocus': '', onclick: () => { view.shown = true; renderOverlay(); } }, 'Antwort zeigen')));
+  } else {
+    foot.append(el('div', { class: 'row' },
+      el('button', { class: 'btn ghost wide', type: 'button', onclick: () => { delete state.known[c.id]; save(); advance(); } }, 'Nochmal'),
+      el('button', { class: 'btn wide', type: 'button', 'data-autofocus': '', onclick: () => { state.known[c.id] = true; save(); advance(); } }, 'Gewusst')));
+  }
+  foot.append(el('div', { class: 'nav' },
+    el('button', { class: 'link-btn', type: 'button', disabled: view.i === 0, onclick: () => { view.i--; view.shown = false; renderOverlay(); } }, '‹ Zurück'),
+    el('button', { class: 'link-btn', type: 'button', disabled: view.i === view.ids.length - 1, onclick: () => { view.i++; view.shown = false; renderOverlay(); } }, 'Weiter ›')));
+  return el('div', { class: 'panel', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Karte ' + num },
+    el('div', { class: 'ptop' },
+      el('span', { class: 'badge' }, el('span', { class: 'dot ' + c.d }), gKey(c.g) + ' · ' + dLabel(c.d)),
+      el('span', { class: 'pos' }, 'Karte ' + num + ' · ' + (view.i + 1) + '/' + view.ids.length),
+      el('button', { class: 'link-btn', type: 'button', onclick: () => { view = { type: 'edit', id: c.id, d: c.d, armed: false, back: view }; renderOverlay(); } }, 'Bearbeiten'),
+      el('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Schließen', onclick: closeView }, '×')),
+    el('div', { class: 'pbody' },
+      el('div', null, el('span', { class: 'field-label' }, 'Frage'), el('p', { class: 'q' }, c.q)),
+      view.shown && el('div', null, el('span', { class: 'field-label' }, 'Antwort'), el('p', { class: 'a' }, c.a)),
+      view.shown && looksBlock(c)),
+    foot);
+}
+
+function editPanel() {
+  const isNew = view.id == null;
+  const c = isNew ? { q: '', a: '' } : byId(view.id);
+  const qf = el('textarea', { id: 'f-q', 'data-autofocus': '', placeholder: 'z. B. Lf 2 (Anfangscheibe) – Was bedeutet das Signal?' });
+  qf.value = c.q;
+  const af = el('textarea', { id: 'f-a', class: 'tall', placeholder: 'Antwort' });
+  af.value = c.a;
+  const seg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Schwierigkeitsgrad' });
+  const paintSeg = () => {
+    seg.replaceChildren(...DIFFS.map(d => el('button', {
+      type: 'button', 'aria-pressed': String(view.d === d.k),
+      onclick: () => { view.d = d.k; paintSeg(); }
+    }, el('span', { class: 'dot ' + d.k }), d.label)));
+  };
+  paintSeg();
+  if (view.g === undefined) view.g = isNew ? (gfilter === 'alle' ? 'Eigene' : gfilter) : gKey(c.g);
+  const gsel = el('select', { class: 'sel', id: 'f-g', 'aria-label': 'Block' }, ...GROUPS.map(x => el('option', { value: x.k }, x.k + ' – ' + x.t)));
+  gsel.value = view.g;
+  gsel.addEventListener('change', () => { view.g = gsel.value; });
+  const msg = el('p', { class: 'msg', role: 'alert' });
+  if (view.img === undefined) view.img = c.img || '';
+  const imgBox = el('div', { class: 'imgfield' });
+  const fileIn = el('input', { type: 'file', accept: 'image/*', id: 'f-img' });
+  fileIn.addEventListener('change', () => {
+    const f = fileIn.files && fileIn.files[0];
+    if (!f) return;
+    readImage(f).then(d => { view.img = d; msg.textContent = ''; paintImg(); })
+      .catch(() => { msg.textContent = 'Das Bild konnte nicht gelesen werden. Bitte ein JPG oder PNG wählen.'; msg.style.color = 'var(--danger)'; })
+      .finally(() => { fileIn.value = ''; });
+  });
+  const paintImg = () => {
+    imgBox.replaceChildren(
+      view.img && el('img', { src: view.img, alt: 'Vorschau des Signalbilds' }),
+      el('div', { class: 'row', style: 'flex-wrap:wrap' },
+        el('label', { class: 'btn ghost filebtn' }, view.img ? 'Anderes Bild wählen' : 'Bild wählen', fileIn),
+        view.img && el('button', { class: 'btn ghost', type: 'button', onclick: () => { view.img = ''; paintImg(); } }, 'Bild entfernen')));
+  };
+  paintImg();
+  const back = () => { if (view.back) { view = view.back; renderOverlay(); } else closeView(); };
+  const delBtn = isNew ? null : el('button', {
+    class: 'btn danger', type: 'button',
+    onclick: e => {
+      if (!view.armed) { view.armed = true; e.target.classList.add('armed'); e.target.textContent = 'Wirklich löschen?'; return; }
+      state.cards = state.cards.filter(x => x.id !== view.id); delete state.known[view.id]; save();
+      closeView(); toast('Karte gelöscht');
+    }
+  }, 'Löschen');
+  return el('div', { class: 'panel', role: 'dialog', 'aria-modal': 'true', 'aria-label': isNew ? 'Neue Karte' : 'Karte bearbeiten' },
+    el('div', { class: 'ptop' },
+      el('span', { class: 'badge' }, isNew ? 'Neue Karte' : 'Karte bearbeiten'),
+      el('button', { class: 'icon-btn', type: 'button', style: 'margin-left:auto', 'aria-label': 'Abbrechen', onclick: back }, '×')),
+    el('form', { class: 'form pbody', onsubmit: e => e.preventDefault() },
+      el('div', null, el('label', { class: 'field-label', for: 'f-q' }, 'Frage'), qf),
+      el('div', null, el('label', { class: 'field-label', for: 'f-a' }, 'Antwort'), af),
+      el('div', null, el('span', { class: 'field-label' }, 'Schwierigkeitsgrad'), seg),
+      el('div', null, el('label', { class: 'field-label', for: 'f-g' }, 'Block'), gsel),
+      el('div', null, el('span', { class: 'field-label' }, 'Bild des Signals (optional)'), imgBox,
+        el('p', { class: 'note', style: 'margin-top:8px' }, 'Foto aus der Galerie oder mit der Kamera. Es erscheint auf der Karte unter der Antwort.')),
+      msg),
+    el('div', { class: 'pfoot' },
+      el('div', { class: 'row' },
+        delBtn,
+        el('button', { class: 'btn ghost', type: 'button', onclick: back }, 'Abbrechen'),
+        el('button', {
+          class: 'btn wide', type: 'button',
+          onclick: () => {
+            const q = qf.value.trim(), a = af.value.trim();
+            if (!q || !a) { msg.textContent = 'Bitte Frage und Antwort ausfüllen.'; msg.style.color = 'var(--danger)'; return; }
+            if (isNew) {
+              state.cards.push({ id: 'u' + Date.now().toString(36), d: view.d, g: gKey(view.g), q, a, img: view.img || '' });
+              if (filter !== 'alle' && filter !== view.d) filter = 'alle';
+              if (gfilter !== 'alle' && gfilter !== gKey(view.g)) gfilter = 'alle';
+            } else {
+              const t = byId(view.id); t.q = q; t.a = a; t.d = view.d; t.g = gKey(view.g); t.img = view.img || '';
+            }
+            const ok = save(); closeView();
+            toast(ok ? 'Karte gespeichert' : 'Speicher voll: die Änderung bleibt nur bis zum Schließen erhalten. Bild entfernen oder kleiner wählen.');
+          }
+        }, 'Speichern'))));
+}
+
+function exportJson() {
+  return JSON.stringify(state.cards.map(c => {
+    const o = { difficulty: c.d, group: gKey(c.g), question: c.q, answer: c.a };
+    if (c.sig && c.sig.length) o.sig = c.sig;
+    if (c.look) o.look = c.look;
+    return o;
+  }), null, 2);
+}
+function managePanel() {
+  const exp = el('textarea', { class: 'tall', readonly: true, id: 'm-exp', 'aria-label': 'Export' });
+  exp.value = exportJson();
+  const imp = el('textarea', { class: 'tall', id: 'm-imp', placeholder: '[{"difficulty":"leicht","question":"…","answer":"…"}]' });
+  const msg = el('p', { class: 'msg', role: 'status' });
+  const say = (t, bad) => { msg.textContent = t; msg.style.color = bad ? 'var(--danger)' : 'var(--ink)'; };
+  const norm = d => { d = String(d || '').toLowerCase(); return DIFFS.some(x => x.k === d) ? d : 'mittel'; };
+  const resetAll = el('button', {
+    class: 'btn danger', type: 'button',
+    onclick: e => {
+      if (!view.armed) { view.armed = true; e.target.classList.add('armed'); e.target.textContent = 'Wirklich alle eigenen Änderungen verwerfen?'; return; }
+      state = fresh(); save(); closeView(); toast('Startkarten wiederhergestellt');
+    }
+  }, 'Auf Startkarten zurücksetzen');
+  return el('div', { class: 'panel', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Karten verwalten' },
+    el('div', { class: 'ptop' },
+      el('span', { class: 'badge' }, 'Karten verwalten'),
+      el('button', { class: 'icon-btn', type: 'button', style: 'margin-left:auto', 'aria-label': 'Schließen', onclick: closeView }, '×')),
+    el('div', { class: 'pbody' },
+      el('div', null,
+        el('label', { class: 'field-label', for: 'm-exp' }, 'Sichern (Text kopieren)'),
+        exp,
+        el('p', { class: 'note', style: 'margin-top:8px' }, 'Eigene Bilder sind in diesem Text nicht enthalten.'),
+        el('div', { class: 'row', style: 'margin-top:8px' },
+          el('button', {
+            class: 'btn ghost', type: 'button',
+            onclick: () => {
+              const done = () => say('Kopiert.');
+              try { navigator.clipboard.writeText(exp.value).then(done, () => { exp.select(); say('Text markiert, bitte selbst kopieren.'); }); }
+              catch (e) { exp.select(); say('Text markiert, bitte selbst kopieren.'); }
+            }
+          }, 'Kopieren'))),
+      el('div', null,
+        el('label', { class: 'field-label', for: 'm-imp' }, 'Karten hinzufügen (Text einfügen)'),
+        imp,
+        el('p', { class: 'note' }, 'Format: Liste mit difficulty (leicht, mittel, schwer), question und answer. Vorhandene Karten bleiben erhalten.'),
+        el('div', { class: 'row', style: 'margin-top:8px' },
+          el('button', {
+            class: 'btn', type: 'button',
+            onclick: () => {
+              try {
+                let data = JSON.parse(imp.value);
+                if (data && !Array.isArray(data) && Array.isArray(data.cards)) data = data.cards;
+                if (!Array.isArray(data)) throw new Error('liste');
+                const add = data.filter(x => x && (x.question || x.q) && (x.answer || x.a)).map((x, i) => ({
+                  id: 'u' + Date.now().toString(36) + i, d: norm(x.difficulty || x.d), g: gKey(x.group || x.g),
+                  q: String(x.question || x.q).trim(), a: String(x.answer || x.a).trim(),
+                  sig: Array.isArray(x.sig) ? x.sig.filter(k => SIG[k]) : [], look: x.look ? String(x.look) : ''
+                }));
+                if (!add.length) throw new Error('leer');
+                state.cards.push(...add); save(); closeView(); toast(add.length + ' Karten hinzugefügt');
+              } catch (e) { say('Der Text ist keine gültige Kartenliste.', true); }
+            }
+          }, 'Hinzufügen'))),
+      el('div', { class: 'row', style: 'flex-wrap:wrap' },
+        el('button', { class: 'btn ghost', type: 'button', onclick: () => { state.known = {}; save(); closeView(); toast('Fortschritt zurückgesetzt'); } }, 'Fortschritt zurücksetzen'),
+        resetAll),
+      msg),
+    el('div', { class: 'pfoot' }, el('button', { class: 'btn ghost', type: 'button', onclick: closeView }, 'Fertig')));
+}
+
+$('addBtn').addEventListener('click', () => {
+  view = { type: 'edit', id: null, d: filter === 'alle' ? 'leicht' : filter, armed: false };
+  renderOverlay();
+});
+$('manageBtn').addEventListener('click', () => { view = { type: 'manage', armed: false }; renderOverlay(); });
+document.addEventListener('keydown', e => {
+  if (!view) return;
+  if (e.key === 'Escape') { if (view.type === 'edit' && view.back) { view = view.back; renderOverlay(); } else closeView(); return; }
+  if (view.type !== 'study' || /^(TEXTAREA|INPUT)$/.test(document.activeElement.tagName)) return;
+  if (e.key === 'ArrowRight' && view.i < view.ids.length - 1) { view.i++; view.shown = false; renderOverlay(); }
+  if (e.key === 'ArrowLeft' && view.i > 0) { view.i--; view.shown = false; renderOverlay(); }
+});
+
+renderMain();
+</script>
