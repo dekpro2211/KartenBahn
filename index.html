@@ -745,20 +745,20 @@ function advance() {
   else { closeView(); toast('Alle Karten dieser Stufe durch'); }
 }
 
-function looksBlock(c) {
+function looksBlock(c, label, noText) {
   const keys = (c.sig || []).filter(k => SIG[k]);
   if (!keys.length && !c.img) return null;
-  const wrap = el('div', null, el('span', { class: 'field-label' }, 'So sieht es aus'));
+  const wrap = el('div', null, el('span', { class: 'field-label' }, label || 'So sieht es aus'));
   const row = el('div', { class: 'sigs' });
-  if (c.img) row.append(el('figure', { class: 'sig' }, el('img', { src: c.img, alt: 'Eigenes Bild des Signals' }), el('figcaption', null, 'Eigenes Bild')));
+  if (c.img) row.append(el('figure', { class: 'sig' }, el('img', { src: c.img, alt: 'Eigenes Bild des Signals' }), noText ? null : el('figcaption', null, 'Eigenes Bild')));
   for (const k of keys) {
     const fig = el('figure', { class: 'sig' });
     fig.innerHTML = SIG[k].svg; // eigene, feste Zeichnungen
-    fig.append(el('figcaption', null, SIG[k].cap));
+    if (!noText) fig.append(el('figcaption', null, SIG[k].cap));
     row.append(fig);
   }
   wrap.append(row);
-  if (c.look) wrap.append(el('p', { class: 'look' }, c.look));
+  if (c.look && !noText) wrap.append(el('p', { class: 'look' }, c.look));
   return wrap;
 }
 
@@ -785,8 +785,9 @@ function studyPanel() {
       el('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Schließen', onclick: closeView }, '×')),
     el('div', { class: 'pbody' },
       el('div', null, el('span', { class: 'field-label' }, 'Frage'), el('p', { class: 'q' }, c.q)),
-      view.shown && el('div', null, el('span', { class: 'field-label' }, 'Antwort'), el('p', { class: 'a' }, c.a)),
-      view.shown && looksBlock(c)),
+      c.d === 'leicht' && looksBlock(c, 'Signal', true),
+      view.shown && el('div', null, el('span', { class: 'field-label' }, 'Antwort'), el('p', { class: 'a' }, c.a), c.d === 'leicht' && c.look ? el('p', { class: 'look' }, c.look) : null),
+      view.shown && c.d !== 'leicht' && looksBlock(c)),
     foot);
 }
 
