@@ -847,8 +847,19 @@ function buildTest(d) {
       if (wrong.length === 3) break;
     }
     const opts = shuffle([{ text: c.a, ok: true }, ...wrong.map(t => ({ text: t, ok: false }))]);
-    return { id: c.id, opts, pick: -1 };
+    return { id: c.id, opts, pick: -1, pic: Math.random() < 0.5 };
   });
+}
+// Leicht-Frage „Bü 0 – Was bedeutet das Signal?“: im Test zufällig nur Bild oder nur Kurzname
+function nameQ(c) {
+  if (c.d !== 'leicht' || !(c.sig || []).some(k => SIG[k]) && !c.img) return null;
+  const i = c.q.indexOf(' – ');
+  if (i < 1) return null;
+  const rest = c.q.slice(i + 3);
+  if (!/^Was bedeutet/i.test(rest)) return null;
+  const short = c.q.slice(0, i).replace(/\s*\(.*\)\s*$/, '').trim();
+  if (!short || short.length > 14) return null;
+  return { short, rest };
 }
 function testPanel() {
   const top = (title, extra) => el('div', { class: 'ptop' },
@@ -880,6 +891,7 @@ function testPanel() {
         el('ul', { class: 'wrong-list' }, ...wrongQs.map(q => el('li', null, byId(q.id).q)))) : el('p', null, 'Alles richtig!')], foot);
   }
   const q = view.qs[view.i], c = byId(q.id), answered = q.pick >= 0;
+  const nq = nameQ(c), rest2 = nq ? nq.rest.replace(/das Signal/i, 'dieses Signal') : '';
   const letters = ['A', 'B', 'C', 'D'];
   const opts = el('div', { class: 'opts' }, ...q.opts.map((o, k) => el('button', {
     class: 'opt' + (answered && o.ok ? ' ok' : '') + (answered && k === q.pick && !o.ok ? ' bad' : ''), type: 'button', disabled: answered,
@@ -891,10 +903,10 @@ function testPanel() {
     onclick: () => { if (last) view.phase = 'done'; else view.i++; renderOverlay(); }
   }, last ? 'Ergebnis' : 'Weiter') : null);
   return wrap(top('Test · ' + dLabel(view.d), el('span', { class: 'pos' }, 'Frage ' + (view.i + 1) + '/' + view.qs.length)), [
-    el('div', null, el('span', { class: 'field-label' }, 'Frage'), el('p', { class: 'q' }, c.q)),
-    c.d === 'leicht' && looksBlock(c, 'Signal', true),
+    el('div', null, el('span', { class: 'field-label' }, 'Frage'), el('p', { class: 'q' }, nq ? (q.pic ? rest2 : nq.short + ' – ' + nq.rest) : c.q)),
+    nq ? (q.pic ? looksBlock(c, 'Signal', true) : null) : (c.d === 'leicht' && looksBlock(c, 'Signal', true)),
     opts,
-    answered && c.d !== 'leicht' && looksBlock(c)], foot);
+    answered && (nq || c.d !== 'leicht') && looksBlock(c, nq ? 'Das Signal' : undefined)], foot);
 }
 $('testBtn').addEventListener('click', () => { view = { type: 'test', phase: 'pick' }; renderOverlay(); });
 
