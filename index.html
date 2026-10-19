@@ -63,6 +63,14 @@ h1 { font: 700 clamp(34px, 8vw, 52px)/0.95 var(--font-d); margin: 0; letter-spac
   background: var(--surface); border: 1.5px solid var(--line); border-radius: 999px; font-weight: 500; font-size: 15px;
 }
 .chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.opts { display: flex; flex-direction: column; gap: 8px; }
+.opt { text-align: left; min-height: 48px; padding: 10px 14px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); font-size: 15px; line-height: 1.4; }
+.opt[disabled] { cursor: default; }
+.opt.ok { border-color: var(--accent); background: var(--tint); font-weight: 600; }
+.opt.bad { border-color: var(--danger); color: var(--danger); }
+.res-big { font: 700 44px/1 var(--font-d); }
+.wrong-list { margin: 0; padding-left: 20px; font-size: 14px; color: var(--muted); }
+.pickbtn { justify-content: flex-start; gap: 10px; }
 .chip-mark { margin-left: 4px; }
 .chip .star { color: #d99a00; font-size: 16px; line-height: 1; }
 .chip[aria-pressed="true"] .star { color: #ffd34d; }
@@ -170,7 +178,7 @@ textarea.tall { min-height: 150px; }
     <div class="chips" id="chips" role="group" aria-label="Schwierigkeitsgrad"></div>
     <div class="tools">
       <button class="btn" id="addBtn" type="button">Neue Karte</button>
-      <button class="btn ghost" id="manageBtn" type="button">Verwalten</button>
+      <button class="btn ghost" id="testBtn" type="button">Test (20 Fragen)</button>
     </div>
   </div>
 
@@ -588,7 +596,7 @@ function seedCard(c, i) {
   return { id: 's' + (i + 1), d: c.difficulty, g: gKey(c.group), q: c.question, a: c.answer, sig: c.sig || [], look: c.look || '' };
 }
 function fresh() {
-  return { cards: SEED.map(seedCard), known: {}, marked: {}, seen: SEED.map((c, i) => 's' + (i + 1)) };
+  return { cards: SEED.map(seedCard), known: {}, marked: {}, tseen: {}, seen: SEED.map((c, i) => 's' + (i + 1)) };
 }
 function migrate(s) {
   for (const c of s.cards) {
@@ -615,6 +623,7 @@ function load() {
       if (s && Array.isArray(s.cards)) {
         s.known = s.known || {};
         s.marked = s.marked || {};
+        s.tseen = s.tseen || {};
         const m = migrate(s);
         try { localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) {}
         return m;
@@ -746,6 +755,7 @@ function renderOverlay() {
   ov.hidden = false; document.body.style.overflow = 'hidden';
   let panel;
   if (view.type === 'study') panel = studyPanel();
+  else if (view.type === 'test') panel = testPanel();
   else if (view.type === 'edit') panel = editPanel();
   else panel = managePanel();
   ov.append(panel);
@@ -806,6 +816,87 @@ function studyPanel() {
       view.shown && c.d !== 'leicht' && looksBlock(c)),
     foot);
 }
+
+/* ---- Test: 20 Fragen mit Auswahlantworten ---- */
+const TEST_N = 20;
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+function buildTest(d) {
+  const pool = state.cards.filter(c => c.d === d);
+  state.tseen = state.tseen || {};
+  const used = new Set(state.tseen[d] || []);
+  const fresh = pool.filter(c => !used.has(c.id));
+  let picked;
+  if (fresh.length >= TEST_N) {
+    picked = shuffle(fresh).slice(0, TEST_N);
+    state.tseen[d] = [...used].concat(picked.map(c => c.id));
+  } else { // Rest der neuen Fragen, dann Auffüllen aus dem Pool: ein neuer Durchgang beginnt
+    const top = shuffle(pool.filter(c => used.has(c.id))).slice(0, TEST_N - fresh.length);
+    picked = shuffle(fresh).concat(top);
+    state.tseen[d] = top.map(c => c.id);
+  }
+  save();
+  return picked.map(c => {
+    const seen = new Set([c.a.trim()]);
+    const same = shuffle(pool.filter(x => x.id !== c.id && gKey(x.g) === gKey(c.g)));
+    const rest = shuffle(pool.filter(x => x.id !== c.id && gKey(x.g) !== gKey(c.g)));
+    const wrong = [];
+    for (const x of [...same, ...rest]) {
+      const t = x.a.trim();
+      if (seen.has(t)) continue;
+      seen.add(t); wrong.push(t);
+      if (wrong.length === 3) break;
+    }
+    const opts = shuffle([{ text: c.a, ok: true }, ...wrong.map(t => ({ text: t, ok: false }))]);
+    return { id: c.id, opts, pick: -1 };
+  });
+}
+function testPanel() {
+  const top = (title, extra) => el('div', { class: 'ptop' },
+    el('span', { class: 'badge' }, title),
+    extra || el('span'),
+    el('button', { class: 'icon-btn', type: 'button', style: 'margin-left:auto', 'aria-label': 'Schließen', onclick: closeView }, '×'));
+  const wrap = (t, body, foot) => el('div', { class: 'panel', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Test' }, t, el('div', { class: 'pbody' }, ...body), foot);
+  if (view.phase === 'pick') {
+    const btns = DIFFS.map(d => {
+      const n = state.cards.filter(c => c.d === d.k).length;
+      return el('button', {
+        class: 'btn ghost pickbtn', type: 'button', disabled: n < 2,
+        onclick: () => { view = { type: 'test', phase: 'run', d: d.k, qs: buildTest(d.k), i: 0 }; renderOverlay(); }
+      }, el('span', { class: 'dot ' + d.k }), d.label, el('span', { class: 'n', style: 'margin-left:auto;opacity:.7' }, (() => { const u = (state.tseen[d.k] || []).filter(id => byId(id) && byId(id).d === d.k).length; return Math.min(TEST_N, n) + ' Fragen · ' + Math.max(0, n - u) + ' noch neu'; })()));
+    });
+    return wrap(top('Test'), [el('p', { class: 'note' }, 'Wähle eine Stufe. Bei jedem Test kommen ' + TEST_N + ' neue Fragen, die noch nicht dran waren. Erst wenn alle Fragen einer Stufe einmal gestellt wurden, beginnt ein neuer Durchgang.'), el('div', { class: 'opts' }, ...btns)]);
+  }
+  if (view.phase === 'done') {
+    const right = view.qs.filter(q => q.opts[q.pick] && q.opts[q.pick].ok).length;
+    const wrongQs = view.qs.filter(q => !(q.opts[q.pick] && q.opts[q.pick].ok));
+    const foot = el('div', { class: 'pfoot' },
+      wrongQs.length ? el('button', { class: 'btn wide', type: 'button', onclick: () => { wrongQs.forEach(q => { state.marked[q.id] = true; }); save(); toast(wrongQs.length + ' Karten markiert ★'); renderMain(); } }, 'Falsche Karten markieren ★') : null,
+      el('div', { class: 'row' },
+        el('button', { class: 'btn ghost wide', type: 'button', onclick: () => { view = { type: 'test', phase: 'pick' }; renderOverlay(); } }, 'Neuer Test'),
+        el('button', { class: 'btn ghost wide', type: 'button', onclick: closeView }, 'Schließen')));
+    return wrap(top('Test · ' + dLabel(view.d)), [
+      el('div', null, el('span', { class: 'field-label' }, 'Ergebnis'), el('p', { class: 'res-big' }, right + ' / ' + view.qs.length), el('p', { class: 'note' }, Math.round(right / view.qs.length * 100) + ' % richtig')),
+      wrongQs.length ? el('div', null, el('span', { class: 'field-label' }, 'Falsch beantwortet'),
+        el('ul', { class: 'wrong-list' }, ...wrongQs.map(q => el('li', null, byId(q.id).q)))) : el('p', null, 'Alles richtig!')], foot);
+  }
+  const q = view.qs[view.i], c = byId(q.id), answered = q.pick >= 0;
+  const letters = ['A', 'B', 'C', 'D'];
+  const opts = el('div', { class: 'opts' }, ...q.opts.map((o, k) => el('button', {
+    class: 'opt' + (answered && o.ok ? ' ok' : '') + (answered && k === q.pick && !o.ok ? ' bad' : ''), type: 'button', disabled: answered,
+    onclick: () => { q.pick = k; renderOverlay(); }
+  }, letters[k] + ')  ' + o.text)));
+  const last = view.i === view.qs.length - 1;
+  const foot = el('div', { class: 'pfoot' }, answered ? el('button', {
+    class: 'btn wide', type: 'button', 'data-autofocus': '',
+    onclick: () => { if (last) view.phase = 'done'; else view.i++; renderOverlay(); }
+  }, last ? 'Ergebnis' : 'Weiter') : null);
+  return wrap(top('Test · ' + dLabel(view.d), el('span', { class: 'pos' }, 'Frage ' + (view.i + 1) + '/' + view.qs.length)), [
+    el('div', null, el('span', { class: 'field-label' }, 'Frage'), el('p', { class: 'q' }, c.q)),
+    c.d === 'leicht' && looksBlock(c, 'Signal', true),
+    opts,
+    answered && c.d !== 'leicht' && looksBlock(c)], foot);
+}
+$('testBtn').addEventListener('click', () => { view = { type: 'test', phase: 'pick' }; renderOverlay(); });
 
 function editPanel() {
   const isNew = view.id == null;
@@ -961,7 +1052,6 @@ $('addBtn').addEventListener('click', () => {
   view = { type: 'edit', id: null, d: filter === 'alle' ? 'leicht' : filter, armed: false };
   renderOverlay();
 });
-$('manageBtn').addEventListener('click', () => { view = { type: 'manage', armed: false }; renderOverlay(); });
 document.addEventListener('keydown', e => {
   if (!view) return;
   if (e.key === 'Escape') { if (view.type === 'edit' && view.back) { view = view.back; renderOverlay(); } else closeView(); return; }
