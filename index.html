@@ -63,6 +63,12 @@ h1 { font: 700 clamp(34px, 8vw, 52px)/0.95 var(--font-d); margin: 0; letter-spac
   background: var(--surface); border: 1.5px solid var(--line); border-radius: 999px; font-weight: 500; font-size: 15px;
 }
 .chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chip-mark { margin-left: 4px; }
+.chip .star { color: #d99a00; font-size: 16px; line-height: 1; }
+.chip[aria-pressed="true"] .star { color: #ffd34d; }
+.tile .mk { position: absolute; left: 7px; bottom: 4px; font-size: 18px; line-height: 1; color: #d99a00; }
+.mark-btn { width: 44px; height: 44px; border: 0; background: transparent; font-size: 26px; line-height: 1; color: var(--muted); border-radius: 10px; }
+.mark-btn.on { color: #d99a00; }
 .chip .n { font-variant-numeric: tabular-nums; opacity: .7; font-size: 13px; }
 .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--muted); }
 .dot.leicht { background: var(--leicht); } .dot.mittel { background: var(--mittel); } .dot.schwer { background: var(--schwer); }
@@ -582,7 +588,7 @@ function seedCard(c, i) {
   return { id: 's' + (i + 1), d: c.difficulty, g: gKey(c.group), q: c.question, a: c.answer, sig: c.sig || [], look: c.look || '' };
 }
 function fresh() {
-  return { cards: SEED.map(seedCard), known: {}, seen: SEED.map((c, i) => 's' + (i + 1)) };
+  return { cards: SEED.map(seedCard), known: {}, marked: {}, seen: SEED.map((c, i) => 's' + (i + 1)) };
 }
 function migrate(s) {
   for (const c of s.cards) {
@@ -608,6 +614,7 @@ function load() {
       const s = JSON.parse(raw);
       if (s && Array.isArray(s.cards)) {
         s.known = s.known || {};
+        s.marked = s.marked || {};
         const m = migrate(s);
         try { localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) {}
         return m;
@@ -641,6 +648,7 @@ function readImage(file) {
 let state = load();
 let filter = 'alle';
 let gfilter = 'alle';
+let mfilter = false;
 let view = null; // {type:'study', ids, i, shown} | {type:'edit', id, d, armed} | {type:'manage', armed}
 let toastTimer = null;
 
@@ -662,7 +670,7 @@ function el(tag, props, ...kids) {
 const $ = id => document.getElementById(id);
 const byId = id => state.cards.find(c => c.id === id);
 const ordered = () => state.cards.map((c, i) => [c, i]).sort((a, b) => gIdx(a[0].g) - gIdx(b[0].g) || a[1] - b[1]).map(x => x[0]);
-const visible = () => ordered().filter(c => (filter === 'alle' || c.d === filter) && (gfilter === 'alle' || gKey(c.g) === gfilter));
+const visible = () => ordered().filter(c => (filter === 'alle' || c.d === filter) && (!mfilter || state.marked[c.id]) && (gfilter === 'alle' || gKey(c.g) === gfilter));
 
 function toast(t) {
   const n = $('toast'); n.textContent = t; n.hidden = false;
@@ -684,6 +692,12 @@ function renderMain() {
       onclick: () => { filter = o.k; renderMain(); }
     }, o.k !== 'alle' && el('span', { class: 'dot ' + o.k }), o.label, el('span', { class: 'n' }, String(n))));
   }
+
+  const nm = state.cards.filter(c => state.marked[c.id]).length;
+  chips.append(el('button', {
+    class: 'chip chip-mark', type: 'button', 'aria-pressed': String(mfilter), title: 'Nur markierte Karten',
+    onclick: () => { mfilter = !mfilter; renderMain(); }
+  }, el('span', { class: 'star', 'aria-hidden': 'true' }, '★'), 'Markiert', el('span', { class: 'n' }, String(nm))));
 
   const gch = $('gchips'); gch.replaceChildren();
   const gopts = [{ k: 'alle', t: 'Alle' }, ...GROUPS.filter(x => state.cards.some(c => gKey(c.g) === x.k))];
@@ -708,9 +722,9 @@ function renderMain() {
       const isKnown = !!state.known[c.id];
       inner.append(el('button', {
         class: 'tile ' + c.d + (isKnown ? ' known' : ''), type: 'button',
-        'aria-label': g.k + ', Karte ' + num + ', ' + dLabel(c.d) + (isKnown ? ', gewusst' : ''),
+        'aria-label': g.k + ', Karte ' + num + ', ' + dLabel(c.d) + (isKnown ? ', gewusst' : '') + (state.marked[c.id] ? ', markiert' : ''),
         onclick: () => openStudy(c.id)
-      }, el('span', { class: 'num' }, String(num)), el('span', { class: 'lbl' }, dLabel(c.d)), isKnown && el('span', { class: 'ok', 'aria-hidden': 'true' }, '✓')));
+      }, el('span', { class: 'num' }, String(num)), el('span', { class: 'lbl' }, dLabel(c.d)), state.marked[c.id] && el('span', { class: 'mk', 'aria-hidden': 'true' }, '★'), isKnown && el('span', { class: 'ok', 'aria-hidden': 'true' }, '✓')));
     }
     const kn = items.filter(c => state.known[c.id]).length;
     grid.append(el('section', { class: 'gsec', 'aria-label': g.k + ' – ' + g.t },
@@ -781,6 +795,8 @@ function studyPanel() {
     el('div', { class: 'ptop' },
       el('span', { class: 'badge' }, el('span', { class: 'dot ' + c.d }), gKey(c.g) + ' · ' + dLabel(c.d)),
       el('span', { class: 'pos' }, 'Karte ' + num + ' · ' + (view.i + 1) + '/' + view.ids.length),
+      el('button', { class: 'mark-btn' + (state.marked[c.id] ? ' on' : ''), type: 'button', 'aria-pressed': String(!!state.marked[c.id]), 'aria-label': 'Karte markieren',
+        onclick: () => { if (state.marked[c.id]) delete state.marked[c.id]; else state.marked[c.id] = true; save(); renderOverlay(); } }, state.marked[c.id] ? '★' : '☆'),
       el('button', { class: 'link-btn', type: 'button', onclick: () => { view = { type: 'edit', id: c.id, d: c.d, armed: false, back: view }; renderOverlay(); } }, 'Bearbeiten'),
       el('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Schließen', onclick: closeView }, '×')),
     el('div', { class: 'pbody' },
@@ -834,7 +850,7 @@ function editPanel() {
     class: 'btn danger', type: 'button',
     onclick: e => {
       if (!view.armed) { view.armed = true; e.target.classList.add('armed'); e.target.textContent = 'Wirklich löschen?'; return; }
-      state.cards = state.cards.filter(x => x.id !== view.id); delete state.known[view.id]; save();
+      state.cards = state.cards.filter(x => x.id !== view.id); delete state.known[view.id]; delete state.marked[view.id]; save();
       closeView(); toast('Karte gelöscht');
     }
   }, 'Löschen');
@@ -935,7 +951,7 @@ function managePanel() {
             }
           }, 'Hinzufügen'))),
       el('div', { class: 'row', style: 'flex-wrap:wrap' },
-        el('button', { class: 'btn ghost', type: 'button', onclick: () => { state.known = {}; save(); closeView(); toast('Fortschritt zurückgesetzt'); } }, 'Fortschritt zurücksetzen'),
+        el('button', { class: 'btn ghost', type: 'button', onclick: () => { state.known = {}; state.marked = {}; save(); closeView(); toast('Fortschritt und Markierungen zurückgesetzt'); } }, 'Fortschritt zurücksetzen'),
         resetAll),
       msg),
     el('div', { class: 'pfoot' }, el('button', { class: 'btn ghost', type: 'button', onclick: closeView }, 'Fertig')));
