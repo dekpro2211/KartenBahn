@@ -1,5 +1,5 @@
 // Offline-Cache: App-Dateien beim Installieren laden, danach zuerst aus dem Cache, im Hintergrund aktualisieren.
-const CACHE = 'signal-karten-v3';
+const CACHE = 'signal-karten-v4';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {

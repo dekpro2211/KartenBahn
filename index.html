@@ -921,7 +921,7 @@ function testPanel() {
     }, el('span', { class: 'dot schreib' }), 'Schreibtest', el('span', { class: 'n', style: 'margin-left:auto;opacity:.7' }, Math.min(TEST_N, wn) + ' Signale · ' + Math.max(0, wn - wu) + ' noch neu'));
     return wrap(top('Test'), [el('span', { class: 'field-label' }, 'Auswahltest'), el('p', { class: 'note' }, 'Wähle eine Stufe. Bei jedem Test kommen ' + TEST_N + ' neue Fragen, die noch nicht dran waren. Erst wenn alle Fragen einer Stufe einmal gestellt wurden, beginnt ein neuer Durchgang.'), el('div', { class: 'opts' }, ...btns),
       el('span', { class: 'field-label', style: 'margin-top:8px' }, 'Schreibtest'),
-      el('p', { class: 'note' }, 'Du siehst das Signalbild und schreibst Kurzbezeichnung, Langbezeichnung und Beschreibung selbst.'),
+      el('p', { class: 'note' }, 'Du siehst das Signalbild und schreibst Kurzbezeichnung, Langbezeichnung und Bedeutung selbst.'),
       el('div', { class: 'opts' }, wbtn)]);
   }
   if (view.phase === 'done') {
@@ -1064,7 +1064,7 @@ function signalNames(c) {
   if (!head || head.length > 26) return null;
   return { kurz: head, kurzAlt: head.split('/').map(x => x.trim()).filter(Boolean), lang, langAlt: lang ? lang.split(/,|\//).map(x => x.trim()).filter(Boolean) : [] };
 }
-const writePool = () => state.cards.filter(c => c.d === 'leicht' && c.look && ((c.sig || []).some(k => SIG[k]) || c.img) && signalNames(c));
+const writePool = () => state.cards.filter(c => c.d === 'leicht' && c.a && ((c.sig || []).some(k => SIG[k]) || c.img) && signalNames(c));
 function buildWrite() {
   const pool = writePool();
   state.tseen = state.tseen || {};
@@ -1121,7 +1121,7 @@ function writePanel() {
     }
     const fmt = x => String(Math.round(x * 10) / 10).replace('.', ',');
     return panel(top(), [
-      el('div', null, el('span', { class: 'field-label' }, 'Ergebnis'), el('p', { class: 'res-big' }, fmt(R) + ' / ' + N), el('p', { class: 'note' }, Math.round(R / N * 100) + ' % der Punkte · je Signal: Kurzbezeichnung, Langbezeichnung, Beschreibung')),
+      el('div', null, el('span', { class: 'field-label' }, 'Ergebnis'), el('p', { class: 'res-big' }, fmt(R) + ' / ' + N), el('p', { class: 'note' }, Math.round(R / N * 100) + ' % der Punkte · je Signal: Kurzbezeichnung, Langbezeichnung, Bedeutung')),
       rows.length ? el('div', null, el('span', { class: 'field-label' }, 'Nicht ganz richtig'),
         el('ul', { class: 'wrong-list' }, ...rows.map(x => { const nm = signalNames(byId(x.q.id)); return el('li', null, nm.kurz + (nm.lang ? ' – ' + nm.lang : '') + ' (' + fmt(x.r) + '/' + x.n + ')'); }))) : el('p', null, 'Alles richtig!')],
       el('div', { class: 'pfoot' },
@@ -1142,7 +1142,7 @@ function writePanel() {
   };
   const verdict = (ok, txt) => el('div', { class: 'verdict ' + (ok ? 'ok' : 'bad') }, el('b', null, ok === 2 ? '✓ Richtig. ' : ok === 1 ? '✓ Fast richtig (Tippfehler). ' : '✗ Richtig wäre: '), txt);
   const body = [
-    el('div', null, el('span', { class: 'field-label' }, 'Wie heißt dieses Signal, und wie sieht es aus?')),
+    el('div', null, el('span', { class: 'field-label' }, 'Wie heißt dieses Signal, und was bedeutet es?')),
     looksBlock(c, 'Signal', true),
     inp('kurz', 'Kurzbezeichnung', 'z. B. Lf 7')];
   if (ck) { const m = matchName(q.kurz, nm.kurzAlt); body.push(verdict(m, m ? nm.kurz : nm.kurz)); }
@@ -1150,11 +1150,11 @@ function writePanel() {
     body.push(inp('lang', 'Langbezeichnung', 'z. B. Geschwindigkeitssignal'));
     if (ck) { const m = matchName(q.lang, nm.langAlt); body.push(verdict(m, nm.lang)); }
   }
-  body.push(inp('desc', 'Beschreibung (wie sieht es aus?)', 'z. B. Eine rechteckige weiße Tafel …', true));
+  body.push(inp('desc', 'Bedeutung (was bedeutet es?)', 'z. B. Die angezeigte Geschwindigkeit darf …', true));
   if (ck) {
-    const kw = keyWords(c.look), have = normT(q.desc) ? kw.filter(w => q.desc.toLowerCase().includes(w)) : [];
-    body.push(el('div', { class: 'verdict' }, el('b', null, 'Musterlösung: '), el('span', { style: 'white-space:pre-line' }, c.look)));
-    body.push(el('p', { class: 'note' }, 'Stichwörter getroffen: ' + have.length + ' von ' + kw.length + (kw.length ? ' (' + Math.round(have.length / kw.length * 100) + ' %)' : '') + '. Vergleiche selbst und bewerte deine Beschreibung:'));
+    const kw = keyWords(c.a), have = normT(q.desc) ? kw.filter(w => q.desc.toLowerCase().includes(w)) : [];
+    body.push(el('div', { class: 'verdict' }, el('b', null, 'Musterlösung: '), el('span', { style: 'white-space:pre-line' }, c.a)));
+    body.push(el('p', { class: 'note' }, 'Stichwörter getroffen: ' + have.length + ' von ' + kw.length + (kw.length ? ' (' + Math.round(have.length / kw.length * 100) + ' %)' : '') + '. Vergleiche selbst und bewerte deine Antwort:'));
     body.push(el('div', { class: 'row' }, ...[['Falsch', 0], ['Teilweise', 1], ['Richtig', 2]].map(([l, v]) => el('button', {
       class: 'btn ' + (q.rate === v ? '' : 'ghost') + ' wide', type: 'button', 'aria-pressed': String(q.rate === v),
       onclick: () => { q.rate = v; renderOverlay(); }
@@ -1163,7 +1163,7 @@ function writePanel() {
   const last = view.i === view.qs.length - 1;
   const foot = el('div', { class: 'pfoot' }, !ck
     ? el('button', { class: 'btn wide', type: 'button', onclick: () => { q.checked = true; renderOverlay(); } }, 'Prüfen')
-    : el('button', { class: 'btn wide', type: 'button', disabled: q.rate < 0, onclick: () => { if (last) view.phase = 'done'; else view.i++; renderOverlay(); } }, q.rate < 0 ? 'Erst Beschreibung bewerten' : last ? 'Ergebnis' : 'Weiter'));
+    : el('button', { class: 'btn wide', type: 'button', disabled: q.rate < 0, onclick: () => { if (last) view.phase = 'done'; else view.i++; renderOverlay(); } }, q.rate < 0 ? 'Erst Antwort bewerten' : last ? 'Ergebnis' : 'Weiter'));
   return panel(top(el('span', { class: 'pos' }, 'Signal ' + (view.i + 1) + '/' + view.qs.length)), body, foot);
 }
 
